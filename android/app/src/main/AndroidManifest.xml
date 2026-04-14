@@ -82,6 +82,21 @@
             </intent-filter>
         </receiver>
 
+        <!-- Monica 백그라운드 서비스 -->
+        <service
+            android:name=".monica.service.MonicaBackgroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Monica 부팅 리시버 -->
+        <receiver
+            android:name=".monica.receiver.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

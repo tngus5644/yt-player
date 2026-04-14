@@ -1,4 +1,4 @@
-package com.ytplayer.app.overlay
+package com.hashmeter.ytplayer.overlay
 
 import android.content.BroadcastReceiver
 import android.content.Context

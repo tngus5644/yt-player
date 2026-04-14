@@ -1,8 +1,8 @@
-package com.ytplayer.app.overlay
+package com.hashmeter.ytplayer.overlay
 
 import android.annotation.SuppressLint
 import android.app.Notification
-import com.ytplayer.app.R
+import com.hashmeter.ytplayer.R
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service

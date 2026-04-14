@@ -1,9 +1,9 @@
-package com.ytplayer.app.webview
+package com.hashmeter.ytplayer.webview
 
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import com.ytplayer.app.channel.DataEventChannel
+import com.hashmeter.ytplayer.channel.DataEventChannel
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject

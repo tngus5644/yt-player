@@ -1,4 +1,4 @@
-package com.ytplayer.app
+package com.hashmeter.ytplayer
 
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -24,7 +24,7 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
-import com.ytplayer.app.adblock.AdBlockHelper
+import com.hashmeter.ytplayer.adblock.AdBlockHelper
 
 /**
  * 영상 재생 Activity

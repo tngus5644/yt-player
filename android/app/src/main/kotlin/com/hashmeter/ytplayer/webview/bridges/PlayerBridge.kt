@@ -1,7 +1,7 @@
-package com.ytplayer.app.webview.bridges
+package com.hashmeter.ytplayer.webview.bridges
 
 import android.webkit.JavascriptInterface
-import com.ytplayer.app.channel.DataEventChannel
+import com.hashmeter.ytplayer.channel.DataEventChannel
 import org.json.JSONObject
 
 /**

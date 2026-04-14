@@ -1,4 +1,4 @@
-package com.ytplayer.app
+package com.hashmeter.ytplayer
 
 import android.annotation.SuppressLint
 import android.app.Activity

@@ -1,4 +1,4 @@
-package com.ytplayer.app.webview
+package com.hashmeter.ytplayer.webview
 
 import android.os.Handler
 import android.os.Looper

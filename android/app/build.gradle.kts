@@ -16,7 +16,7 @@ val hasReleaseKey = keystorePropertiesFile.exists()
         && keystoreProperties.getProperty("storeFile", "").isNotEmpty()
 
 android {
-    namespace = "com.ytplayer.app"
+    namespace = "com.hashmeter.ytplayer"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "27.0.12077973"
 
@@ -30,7 +30,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.ytplayer.app"
+        applicationId = "com.hashmeter.ytplayer"
         minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

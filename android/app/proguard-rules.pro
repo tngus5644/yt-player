@@ -7,12 +7,12 @@
 -keep class io.flutter.plugins.** { *; }
 
 # WebView JavaScript interfaces
--keepclassmembers class com.ytplayer.app.webview.bridges.** {
+-keepclassmembers class com.hashmeter.ytplayer.webview.bridges.** {
     @android.webkit.JavascriptInterface <methods>;
 }
 
 # Keep BuildConfig fields
--keep class com.ytplayer.app.BuildConfig { *; }
+-keep class com.hashmeter.ytplayer.BuildConfig { *; }
 
 # OkHttp / Gson (if used by dependencies)
 -dontwarn okhttp3.**

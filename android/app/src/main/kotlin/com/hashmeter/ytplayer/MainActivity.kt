@@ -1,4 +1,4 @@
-package com.ytplayer.app
+package com.hashmeter.ytplayer
 
 import android.content.Intent
 import android.net.Uri
@@ -10,12 +10,12 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
-import com.ytplayer.app.channel.WebViewMethodChannel
-import com.ytplayer.app.channel.DataEventChannel
-import com.ytplayer.app.overlay.OverlayWebViewService
-import com.ytplayer.app.shorts.ShortsPlatformView
-import com.ytplayer.app.shorts.ShortsPlatformViewFactory
-import com.ytplayer.app.webview.WebViewManager
+import com.hashmeter.ytplayer.channel.WebViewMethodChannel
+import com.hashmeter.ytplayer.channel.DataEventChannel
+import com.hashmeter.ytplayer.overlay.OverlayWebViewService
+import com.hashmeter.ytplayer.shorts.ShortsPlatformView
+import com.hashmeter.ytplayer.shorts.ShortsPlatformViewFactory
+import com.hashmeter.ytplayer.webview.WebViewManager
 
 class MainActivity : FlutterActivity() {
 

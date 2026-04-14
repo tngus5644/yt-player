@@ -1,6 +1,6 @@
 abstract class AppConstants {
   static const String appName = 'YTPlayer';
-  static const String packageName = 'com.ytplayer.app';
+  static const String packageName = 'com.hashmeter.ytplayer';
 
   // WebView URLs
   static const String youtubeHomeUrl = 'https://m.youtube.com/';

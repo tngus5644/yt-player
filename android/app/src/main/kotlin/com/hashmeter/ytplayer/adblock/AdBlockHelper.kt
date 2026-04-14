@@ -1,4 +1,4 @@
-package com.ytplayer.app.adblock
+package com.hashmeter.ytplayer.adblock
 
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse

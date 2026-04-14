@@ -1,4 +1,4 @@
-package com.ytplayer.app.webview
+package com.hashmeter.ytplayer.webview
 
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -7,10 +7,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.*
 import android.widget.FrameLayout
-import com.ytplayer.app.adblock.AdBlockHelper
-import com.ytplayer.app.webview.bridges.VideoListBridge
-import com.ytplayer.app.webview.bridges.AuthBridge
-import com.ytplayer.app.channel.DataEventChannel
+import com.hashmeter.ytplayer.adblock.AdBlockHelper
+import com.hashmeter.ytplayer.webview.bridges.VideoListBridge
+import com.hashmeter.ytplayer.webview.bridges.AuthBridge
+import com.hashmeter.ytplayer.channel.DataEventChannel
 import io.flutter.plugin.common.MethodChannel
 import org.json.JSONObject
 

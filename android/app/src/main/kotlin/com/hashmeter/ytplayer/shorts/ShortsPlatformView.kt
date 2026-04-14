@@ -1,11 +1,11 @@
-package com.ytplayer.app.shorts
+package com.hashmeter.ytplayer.shorts
 
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.view.View
 import android.webkit.*
-import com.ytplayer.app.adblock.AdBlockHelper
+import com.hashmeter.ytplayer.adblock.AdBlockHelper
 import io.flutter.plugin.platform.PlatformView
 
 /**

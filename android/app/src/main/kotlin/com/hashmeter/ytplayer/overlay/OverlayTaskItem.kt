@@ -1,4 +1,4 @@
-package com.ytplayer.app.overlay
+package com.hashmeter.ytplayer.overlay
 
 /**
  * 오버레이 WebView가 처리할 작업 항목

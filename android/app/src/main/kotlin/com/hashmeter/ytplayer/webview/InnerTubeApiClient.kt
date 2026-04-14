@@ -1,8 +1,8 @@
-package com.ytplayer.app.webview
+package com.hashmeter.ytplayer.webview
 
 import android.util.Log
 import android.webkit.CookieManager
-import com.ytplayer.app.adblock.AdBlockHelper
+import com.hashmeter.ytplayer.adblock.AdBlockHelper
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection

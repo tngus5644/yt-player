@@ -1,4 +1,4 @@
-package com.ytplayer.app.channel
+package com.hashmeter.ytplayer.channel
 
 import android.os.Handler
 import android.os.Looper

@@ -1,9 +1,9 @@
-package com.ytplayer.app.channel
+package com.hashmeter.ytplayer.channel
 
 import android.app.Activity
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
-import com.ytplayer.app.webview.WebViewManager
+import com.hashmeter.ytplayer.webview.WebViewManager
 import kotlinx.coroutines.*
 
 /**

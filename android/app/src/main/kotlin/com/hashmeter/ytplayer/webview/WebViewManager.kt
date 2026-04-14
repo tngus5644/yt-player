@@ -1,4 +1,4 @@
-package com.ytplayer.app.webview
+package com.hashmeter.ytplayer.webview
 
 import android.app.Activity
 import android.content.Intent
@@ -7,11 +7,11 @@ import android.os.Looper
 import android.util.Log
 import android.webkit.*
 import io.flutter.plugin.common.MethodChannel
-import com.ytplayer.app.BuildConfig
-import com.ytplayer.app.channel.DataEventChannel
-import com.ytplayer.app.PlayerActivity
-import com.ytplayer.app.WebViewSignInActivity
-import com.ytplayer.app.adblock.AdBlockHelper
+import com.hashmeter.ytplayer.BuildConfig
+import com.hashmeter.ytplayer.channel.DataEventChannel
+import com.hashmeter.ytplayer.PlayerActivity
+import com.hashmeter.ytplayer.WebViewSignInActivity
+import com.hashmeter.ytplayer.adblock.AdBlockHelper
 import org.json.JSONObject
 
 /**

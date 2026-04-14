@@ -1,4 +1,4 @@
-package com.ytplayer.app.shorts
+package com.hashmeter.ytplayer.shorts
 
 import android.content.Context
 import io.flutter.plugin.common.StandardMessageCodec

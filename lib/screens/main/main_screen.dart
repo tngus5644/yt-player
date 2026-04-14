@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/reward_provider.dart';
 import '../../providers/webview_provider.dart';
 import 'tabs/home_tab.dart';
 import 'tabs/shorts_tab.dart';
 import 'tabs/ytplayer_tab.dart';
 import 'tabs/subscribe_tab.dart';
-import 'tabs/profile_tab.dart';
+import 'tabs/library_tab.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
@@ -20,23 +22,55 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     ShortsTab(),
     YTPlayerTab(),
     SubscribeTab(),
-    ProfileTab(),
+    LibraryTab(),
   ];
 
   @override
   void initState() {
     super.initState();
-    // 앱 시작 시 홈 피드 로드
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // 앱 시작 시 홈 피드 로드
       ref.read(homeVideoListProvider.notifier).loadHomeFeed();
+      // 로그인 상태 변화 감지
+      ref.listenManual(loginStateProvider, (prev, next) {
+        if (next) _onLoggedIn();
+      });
     });
   }
+
+  void _onLoggedIn() {
+    // YTPlayerTab 데이터 로드
+    ref.read(balanceProvider.notifier).fetch();
+    ref.read(rewardChartProvider.notifier).fetch();
+    ref.read(noticeProvider.notifier).fetch();
+    ref.read(rewardListProvider.notifier).fetch();
+    ref.read(rewardUsagesProvider.notifier).fetch();
+    // 구독 탭 데이터 로드
+    ref.read(subscriptionListProvider.notifier).load();
+    ref.read(subscriptionFeedProvider.notifier).load();
+    // 보관함 데이터 로드
+    ref.read(libraryDataProvider.notifier).load();
+    // 로그인 후 개인화된 피드로 리로드
+    ref.read(homeVideoListProvider.notifier).loadHomeFeed(isRefresh: true);
+    ref.read(shortsVideoListProvider.notifier).load(isRefresh: true);
+  }
+
+  static const _shortsChannel = MethodChannel('com.ytplayer/shorts');
 
   void _onTabChanged(int index) {
     final prevIndex = ref.read(currentTabProvider);
     ref.read(currentTabProvider.notifier).state = index;
 
+    // 쇼츠 탭 오디오 관리
+    if (prevIndex == 1 && index != 1) {
+      _shortsChannel.invokeMethod('pauseShorts');
+    }
+    if (index == 1 && prevIndex != 1) {
+      _shortsChannel.invokeMethod('resumeShorts');
+    }
+
     // 탭 전환 시 해당 탭의 데이터 로드 (WebView는 하나이므로 탭별 로드 관리)
+    // YTPlayerTab(case 2)은 자체 initState에서 데이터를 로드
     if (index != prevIndex) {
       switch (index) {
         case 0: // 홈
@@ -55,6 +89,19 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           final isLoggedIn = ref.read(loginStateProvider);
           if (isLoggedIn) {
             ref.read(subscriptionListProvider.notifier).load();
+            final feed = ref.read(subscriptionFeedProvider);
+            if (feed is AsyncLoading || (feed.valueOrNull?.isEmpty ?? true)) {
+              ref.read(subscriptionFeedProvider.notifier).load();
+            }
+          }
+          break;
+        case 4: // 보관함
+          final isLoggedIn = ref.read(loginStateProvider);
+          if (isLoggedIn) {
+            final library = ref.read(libraryDataProvider);
+            if (library is AsyncLoading || library.valueOrNull == null) {
+              ref.read(libraryDataProvider.notifier).load();
+            }
           }
           break;
       }
@@ -72,21 +119,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: currentTab,
-        onTap: (index) {
-          if (index == 1) {
-            // 쇼츠 탭 → YouTube 쇼츠 바로 재생
-            ref
-                .read(webViewChannelProvider)
-                .playVideo('https://m.youtube.com/shorts');
-            return;
-          }
-          // 구독/프로필 탭 → 미로그인이면 자동 로그인
-          if ((index == 3 || index == 4) && !ref.read(loginStateProvider)) {
-            ref.read(loginStateProvider.notifier).signIn();
-            return;
-          }
-          _onTabChanged(index);
-        },
+        onTap: _onTabChanged,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
@@ -109,9 +142,9 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             label: '구독',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: '프로필',
+            icon: Icon(Icons.video_library_outlined),
+            activeIcon: Icon(Icons.video_library),
+            label: '보관함',
           ),
         ],
       ),

@@ -17,6 +17,7 @@
         android:label="YTPlayer"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:usesCleartextTraffic="true">
 
         <!-- Main Flutter Activity -->
@@ -42,13 +43,13 @@
         <activity
             android:name=".PlayerActivity"
             android:exported="false"
-            android:launchMode="singleTask"
+            android:launchMode="singleTop"
             android:theme="@style/PlayerTheme"
             android:hardwareAccelerated="true"
             android:supportsPictureInPicture="true"
             android:resizeableActivity="true"
             android:screenOrientation="unspecified"
-            android:configChanges="smallestScreenSize|screenSize|screenLayout|orientation" />
+            android:configChanges="smallestScreenSize|screenSize|screenLayout|orientation|keyboard|keyboardHidden|density|fontScale" />
 
         <!-- WebView Sign-In Activity -->
         <activity

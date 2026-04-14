@@ -27,6 +27,10 @@ abstract class AppColors {
   // Channel
   static const Color channelName = Color(0xFF0D0D0D);
 
+  // Reward
+  static const Color gold = Color(0xFFFFD700);
+  static const Color pointGreen = Color(0xFF4CAF50);
+
   // General
   static const Color background = Color(0xFFFFFFFF);
   static const Color surface = Color(0xFFF7F7F7);

@@ -2,9 +2,6 @@ abstract class AppConstants {
   static const String appName = 'YTPlayer';
   static const String packageName = 'com.ytplayer.app';
 
-  // API
-  static const String apiBaseUrl = 'https://api.youplayer.co.kr/api/v2/';
-
   // WebView URLs
   static const String youtubeHomeUrl = 'https://m.youtube.com/';
   static const String youtubeSearchUrl = 'https://m.youtube.com/results';
@@ -39,4 +36,8 @@ abstract class AppConstants {
 
   // Reward
   static const int rewardThreshold = 60;
+  static const String rewardApiBaseUrl = 'https://pcaview.com';
+
+  // SharedPreferences Keys - Reward
+  static const String prefRewardBalance = 'reward_balance';
 }

@@ -4,6 +4,7 @@ import android.app.Activity
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import com.ytplayer.app.webview.WebViewManager
+import kotlinx.coroutines.*
 
 /**
  * Flutter → Native 메서드 채널 핸들러
@@ -14,6 +15,8 @@ class WebViewMethodChannel(
     private val dataEventChannel: DataEventChannel
 ) : MethodChannel.MethodCallHandler {
 
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
     val webViewManager by lazy {
         WebViewManager(activity, dataEventChannel)
     }
@@ -21,7 +24,8 @@ class WebViewMethodChannel(
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "loadHomeFeed" -> {
-                webViewManager.loadHomeFeed()
+                val isRefresh = call.argument<Boolean>("isRefresh") ?: false
+                webViewManager.loadHomeFeed(isRefresh)
                 result.success(null)
             }
             "search" -> {
@@ -37,8 +41,25 @@ class WebViewMethodChannel(
                 webViewManager.loadShorts()
                 result.success(null)
             }
-            "loadProfile" -> {
-                webViewManager.loadProfile()
+            "loadLibrary" -> {
+                webViewManager.loadLibrary()
+                result.success(null)
+            }
+            "loadHistory" -> {
+                webViewManager.loadHistory()
+                result.success(null)
+            }
+            "loadHistoryContinuation" -> {
+                webViewManager.loadHistoryContinuation()
+                result.success(null)
+            }
+            "loadPlaylistDetail" -> {
+                val playlistId = call.argument<String>("playlistId") ?: ""
+                if (playlistId.isEmpty()) {
+                    result.error("INVALID_ARGS", "playlistId is required", null)
+                    return
+                }
+                webViewManager.loadPlaylistDetail(playlistId)
                 result.success(null)
             }
             "loadDashboard" -> {
@@ -63,6 +84,27 @@ class WebViewMethodChannel(
             "scrollBottom" -> {
                 webViewManager.scrollBottom()
                 result.success(null)
+            }
+            "loadMoreHomeFeed" -> {
+                webViewManager.loadMoreHomeFeed()
+                result.success(null)
+            }
+            "getVideoDetail" -> {
+                val videoId = call.argument<String>("videoId") ?: ""
+                if (videoId.isEmpty()) {
+                    result.error("INVALID_ARGS", "videoId is required", null)
+                    return
+                }
+                scope.launch {
+                    try {
+                        val detail = withContext(Dispatchers.IO) {
+                            webViewManager.getVideoDetail(videoId)
+                        }
+                        result.success(detail.toString())
+                    } catch (e: Exception) {
+                        result.error("API_ERROR", e.message, null)
+                    }
+                }
             }
             else -> result.notImplemented()
         }

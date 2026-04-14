@@ -129,6 +129,7 @@ class WebViewSignInActivity : Activity() {
 
         val cookies = CookieManager.getInstance().getCookie("https://m.youtube.com") ?: ""
         if (cookies.contains("SID=") || cookies.contains("SSID=")) {
+            CookieManager.getInstance().flush()
             setResult(RESULT_OK)
             finish()
         }

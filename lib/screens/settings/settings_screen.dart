@@ -13,16 +13,32 @@ class SettingsScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('설정')),
       body: ListView(
         children: [
-          const ListTile(
-            leading: Icon(Icons.notifications_outlined),
-            title: Text('알림 설정'),
-            trailing: Icon(Icons.chevron_right),
+          ListTile(
+            leading: const Icon(Icons.notifications_outlined),
+            title: const Text('알림 설정'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('준비 중인 기능입니다'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
           ),
           const Divider(),
-          const ListTile(
-            leading: Icon(Icons.info_outline),
-            title: Text('앱 정보'),
-            trailing: Icon(Icons.chevron_right),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('앱 정보'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('준비 중인 기능입니다'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
           ),
           ListTile(
             leading: const Icon(Icons.code),

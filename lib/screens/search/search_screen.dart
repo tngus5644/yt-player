@@ -72,7 +72,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           if (videos.isEmpty) {
             return Center(
               child: Text(
-                '검색어를 입력하세요',
+                _controller.text.trim().isEmpty
+                    ? '검색어를 입력하세요'
+                    : '검색 결과가 없습니다',
                 style: TextStyle(color: colorScheme.onSurfaceVariant),
               ),
             );
@@ -83,9 +85,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               return VideoCard(
                 video: videos[index],
                 onTap: () {
-                  ref
-                      .read(webViewChannelProvider)
-                      .playVideo(videos[index].youtubeUrl);
+                  ref.read(webViewChannelProvider).playVideo(
+                    'https://m.youtube.com/watch?v=${videos[index].id}',
+                  );
                 },
               );
             },

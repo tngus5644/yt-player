@@ -3,9 +3,12 @@ package com.ytplayer.app
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.PictureInPictureParams
+import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Rational
 import android.graphics.*
 import android.graphics.drawable.Drawable
@@ -19,6 +22,8 @@ import android.webkit.*
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.ProgressBar
+import android.widget.TextView
 import com.ytplayer.app.adblock.AdBlockHelper
 
 /**
@@ -27,24 +32,46 @@ import com.ytplayer.app.adblock.AdBlockHelper
  */
 class PlayerActivity : Activity() {
 
+    companion object {
+        var currentInstance: PlayerActivity? = null
+
+        fun finishIfRunning() {
+            currentInstance?.finishAndRemoveTask()
+            currentInstance = null
+        }
+    }
+
     private lateinit var webView: WebView
     private lateinit var fullscreenContainer: FrameLayout
-    private var backBtn: ImageButton? = null
+    private var pipBtn: ImageButton? = null
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
 
+    // 로딩/에러 UI
+    private lateinit var loadingOverlay: FrameLayout
+    private lateinit var errorOverlay: FrameLayout
+    private val timeoutHandler = Handler(Looper.getMainLooper())
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 기존 PIP PlayerActivity가 있으면 종료
+        currentInstance?.finishAndRemoveTask()
+        currentInstance = this
 
         fullscreenContainer = FrameLayout(this)
         fullscreenContainer.setBackgroundColor(Color.BLACK)
         setContentView(fullscreenContainer)
 
-        // 전체화면 몰입 모드 (setContentView 이후에 호출해야 DecorView가 초기화됨)
+        // 상태바 투명 표시 + 네비게이션바만 숨김
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.BLACK
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.setDecorFitsSystemWindows(false)
             window.insetsController?.let {
-                it.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+                it.hide(WindowInsets.Type.navigationBars())  // 네비게이션바만 숨김
                 it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             }
         } else {
@@ -52,17 +79,37 @@ class PlayerActivity : Activity() {
             window.decorView.systemUiVisibility = (
                 View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                     or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    or View.SYSTEM_UI_FLAG_FULLSCREEN
                     or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                     or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                     or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
             )
+            // SYSTEM_UI_FLAG_FULLSCREEN 제거 → 상태바 표시
         }
 
         initWebView()
+        initLoadingOverlay()
+        initErrorOverlay()
+
+        // API 31+: 홈 버튼 시 자동 PIP 진입 (부드러운 전환)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            setPictureInPictureParams(
+                PictureInPictureParams.Builder()
+                    .setAspectRatio(Rational(16, 9))
+                    .setAutoEnterEnabled(true)
+                    .build()
+            )
+        }
 
         val videoUrl = intent.getStringExtra("video_url") ?: return finish()
         webView.loadUrl(videoUrl)
+
+        // 15초 타임아웃 보호
+        timeoutHandler.postDelayed({
+            if (loadingOverlay.visibility == View.VISIBLE) {
+                loadingOverlay.visibility = View.GONE
+                errorOverlay.visibility = View.VISIBLE
+            }
+        }, 15000)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -99,9 +146,30 @@ class PlayerActivity : Activity() {
                     return super.shouldInterceptRequest(view, request)
                 }
 
+                override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                    super.onPageStarted(view, url, favicon)
+                    loadingOverlay.visibility = View.VISIBLE
+                    errorOverlay.visibility = View.GONE
+                }
+
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
+                    timeoutHandler.removeCallbacksAndMessages(null)
+                    loadingOverlay.visibility = View.GONE
                     injectAdBlockAndUiHide(view)
+                    // Shorts면 PiP 버튼 숨김
+                    pipBtn?.visibility = if (url?.contains("/shorts/") == true) View.GONE else View.VISIBLE
+                }
+
+                override fun onReceivedError(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                    error: WebResourceError?
+                ) {
+                    if (request?.isForMainFrame == true) {
+                        loadingOverlay.visibility = View.GONE
+                        errorOverlay.visibility = View.VISIBLE
+                    }
                 }
             }
 
@@ -114,6 +182,7 @@ class PlayerActivity : Activity() {
                     customViewCallback = callback
                     fullscreenContainer.addView(view)
                     webView.visibility = View.GONE
+                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                 }
 
                 override fun onHideCustomView() {
@@ -122,19 +191,20 @@ class PlayerActivity : Activity() {
                     customViewCallback?.onCustomViewHidden()
                     customView = null
                     customViewCallback = null
+                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                 }
             }
         }
 
         fullscreenContainer.addView(webView)
 
-        // 뒤로가기 버튼 오버레이
+        // PiP 전환 버튼 오버레이 (아래 쉐브론 ∨)
         val density = resources.displayMetrics.density
         val btnSize = (40 * density).toInt()
-        backBtn = ImageButton(this).apply {
+        pipBtn = ImageButton(this).apply {
             layoutParams = FrameLayout.LayoutParams(btnSize, btnSize).apply {
                 gravity = Gravity.TOP or Gravity.START
-                topMargin = (16 * density).toInt()
+                topMargin = getStatusBarHeight() + (8 * density).toInt()
                 leftMargin = (12 * density).toInt()
             }
             background = GradientDrawable().apply {
@@ -153,8 +223,9 @@ class PlayerActivity : Activity() {
                     val w = bounds.width().toFloat()
                     val h = bounds.height().toFloat()
                     val s = minOf(w, h) * 0.22f
-                    canvas.drawLine(w / 2 + s * 0.3f, h / 2 - s, w / 2 - s * 0.7f, h / 2, paint)
-                    canvas.drawLine(w / 2 - s * 0.7f, h / 2, w / 2 + s * 0.3f, h / 2 + s, paint)
+                    // 아래 방향 쉐브론: ∨
+                    canvas.drawLine(w / 2 - s, h / 2 - s * 0.4f, w / 2, h / 2 + s * 0.6f, paint)
+                    canvas.drawLine(w / 2, h / 2 + s * 0.6f, w / 2 + s, h / 2 - s * 0.4f, paint)
                 }
                 override fun setAlpha(alpha: Int) {}
                 override fun setColorFilter(colorFilter: ColorFilter?) {}
@@ -164,17 +235,156 @@ class PlayerActivity : Activity() {
             scaleType = ImageView.ScaleType.CENTER
             val pad = (6 * density).toInt()
             setPadding(pad, pad, pad, pad)
-            setOnClickListener { finish() }
+            setOnClickListener { enterPipMode() }
             elevation = 8 * density
         }
-        fullscreenContainer.addView(backBtn)
+        fullscreenContainer.addView(pipBtn)
     }
+
+    /**
+     * 로딩 오버레이: 반투명 검은 배경 + ProgressBar + 텍스트
+     */
+    private fun initLoadingOverlay() {
+        val density = resources.displayMetrics.density
+        loadingOverlay = FrameLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(Color.argb(200, 0, 0, 0))
+            visibility = View.VISIBLE
+
+            // 중앙 ProgressBar
+            val spinner = ProgressBar(this@PlayerActivity).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    (48 * density).toInt(), (48 * density).toInt()
+                ).apply {
+                    gravity = Gravity.CENTER
+                    bottomMargin = (16 * density).toInt()
+                }
+                isIndeterminate = true
+            }
+            addView(spinner)
+
+            // "영상을 불러오는 중..." 텍스트
+            val label = TextView(this@PlayerActivity).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    gravity = Gravity.CENTER
+                    topMargin = (32 * density).toInt()
+                }
+                text = "영상을 불러오는 중..."
+                setTextColor(Color.WHITE)
+                textSize = 14f
+            }
+            addView(label)
+        }
+        fullscreenContainer.addView(loadingOverlay)
+    }
+
+    /**
+     * 에러 오버레이: 아이콘 + 메시지 + 다시 시도 버튼
+     */
+    private fun initErrorOverlay() {
+        val density = resources.displayMetrics.density
+        errorOverlay = FrameLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(Color.argb(220, 0, 0, 0))
+            visibility = View.GONE
+
+            // 에러 아이콘 (X 마크를 Canvas로)
+            val iconView = object : View(this@PlayerActivity) {
+                private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.argb(200, 255, 255, 255)
+                    style = Paint.Style.STROKE
+                    strokeWidth = 3f * density
+                    strokeCap = Paint.Cap.ROUND
+                }
+                override fun onDraw(canvas: Canvas) {
+                    val cx = width / 2f
+                    val cy = height / 2f
+                    val r = minOf(width, height) * 0.3f
+                    // 원
+                    canvas.drawCircle(cx, cy, r, paint)
+                    // X
+                    val s = r * 0.5f
+                    canvas.drawLine(cx - s, cy - s, cx + s, cy + s, paint)
+                    canvas.drawLine(cx + s, cy - s, cx - s, cy + s, paint)
+                }
+            }.apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    (56 * density).toInt(), (56 * density).toInt()
+                ).apply {
+                    gravity = Gravity.CENTER
+                    bottomMargin = (56 * density).toInt()
+                }
+            }
+            addView(iconView)
+
+            // "영상을 불러올 수 없습니다" 텍스트
+            val msgLabel = TextView(this@PlayerActivity).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    gravity = Gravity.CENTER
+                }
+                text = "영상을 불러올 수 없습니다"
+                setTextColor(Color.WHITE)
+                textSize = 15f
+            }
+            addView(msgLabel)
+
+            // "다시 시도" 버튼
+            val retryBtn = TextView(this@PlayerActivity).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    gravity = Gravity.CENTER
+                    topMargin = (40 * density).toInt()
+                }
+                text = "다시 시도"
+                setTextColor(Color.WHITE)
+                textSize = 14f
+                val pad = (16 * density).toInt()
+                setPadding(pad * 2, pad, pad * 2, pad)
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = 24 * density
+                    setStroke((1.5f * density).toInt(), Color.argb(180, 255, 255, 255))
+                }
+                setOnClickListener {
+                    errorOverlay.visibility = View.GONE
+                    loadingOverlay.visibility = View.VISIBLE
+                    timeoutHandler.postDelayed({
+                        if (loadingOverlay.visibility == View.VISIBLE) {
+                            loadingOverlay.visibility = View.GONE
+                            errorOverlay.visibility = View.VISIBLE
+                        }
+                    }, 15000)
+                    webView.reload()
+                }
+            }
+            addView(retryBtn)
+        }
+        fullscreenContainer.addView(errorOverlay)
+    }
+
 
     /**
      * 광고 차단 + YouTube 헤더 숨김 JS 인젝션
      */
     private fun injectAdBlockAndUiHide(view: WebView?) {
         view ?: return
+
+        val density = resources.displayMetrics.density
+        val statusBarDp = (getStatusBarHeight() / density).toInt()
 
         view.evaluateJavascript("""
             (function() {
@@ -193,11 +403,43 @@ class PlayerActivity : Activity() {
                     .topbar-menu-button-avatar-button,
                     ytm-searchbox,
                     .tab-title-bar,
-                    .watch-below-the-player,
-                    .slim-video-metadata-header,
                     .compact-link-icon,
                     ytm-pivot-bar-renderer {
                         display: none !important;
+                    }
+
+                    /* 헤더 숨김 후 남은 상단 여백 제거 (상태바 높이 보존) */
+                    html {
+                        --ytm-toolbar-height: ${statusBarDp}px !important;
+                        --ytm-toolbar-offset: ${statusBarDp}px !important;
+                        --ytm-header-height: 0px !important;
+                    }
+
+                    #app {
+                        padding-top: unset !important;
+                    }
+
+                    #header-bar {
+                        display: none !important;
+                    }
+
+                    #player-container-id {
+                        top: ${statusBarDp}px !important;
+                    }
+
+                    .watch-below-the-player {
+                        position: relative !important;
+                        top: auto !important;
+                    }
+
+                    ytm-engagement-panel {
+                        position: relative !important;
+                        top: auto !important;
+                    }
+
+                    ytm-related-chip-cloud-renderer.chips-visible {
+                        position: relative !important;
+                        top: auto !important;
                     }
 
                     /* 광고 요소 숨김 */
@@ -258,21 +500,81 @@ class PlayerActivity : Activity() {
                 observer.observe(document.documentElement, {
                     childList: true, subtree: true
                 });
+
+                // ========== 3. 영상 정보 영역 레이아웃 동적 조정 ==========
+                function adjustLayout() {
+                    var player = document.querySelector('#player-container-id');
+                    var below = document.querySelector('.watch-below-the-player');
+                    if (!player || !below) return false;
+
+                    var playerBottom = player.getBoundingClientRect().bottom;
+                    var belowTop = below.getBoundingClientRect().top;
+                    if (playerBottom <= 0) return false;
+
+                    var overlap = playerBottom - belowTop;
+                    if (overlap > 0) {
+                        below.style.setProperty('margin-top', overlap + 'px', 'important');
+                    }
+                    return true;
+                }
+
+                var retryCount = 0;
+                function tryAdjust() {
+                    if (adjustLayout() || retryCount >= 10) return;
+                    retryCount++;
+                    setTimeout(tryAdjust, 500);
+                }
+                setTimeout(tryAdjust, 300);
+
+                if (typeof ResizeObserver !== 'undefined') {
+                    var debounceTimer;
+                    var ro = new ResizeObserver(function() {
+                        clearTimeout(debounceTimer);
+                        debounceTimer = setTimeout(adjustLayout, 100);
+                    });
+                    var playerEl = document.querySelector('#player-container-id');
+                    if (playerEl) ro.observe(playerEl);
+                }
+
+                // SPA 내비게이션 대응
+                document.addEventListener('yt-navigate-finish', function() {
+                    retryCount = 0;
+                    setTimeout(tryAdjust, 300);
+                });
             })();
         """.trimIndent(), null)
     }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        enterPipMode()
+        if (!isShowingShorts()) {
+            enterPipMode()
+        }
+    }
+
+    private fun isShowingShorts(): Boolean {
+        val url = webView.url ?: return false
+        return url.contains("/shorts/")
+    }
+
+    private fun getStatusBarHeight(): Int {
+        val resourceId = resources.getIdentifier("status_bar_height", "dimen", "android")
+        return if (resourceId > 0) resources.getDimensionPixelSize(resourceId) else 0
     }
 
     private fun enterPipMode() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val params = PictureInPictureParams.Builder()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !isShowingShorts()) {
+            val builder = PictureInPictureParams.Builder()
                 .setAspectRatio(Rational(16, 9))
-                .build()
-            enterPictureInPictureMode(params)
+
+            // API 31+: 비디오 영역에서 부드러운 전환 애니메이션
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val videoHeight = (webView.width * 9f / 16f).toInt()
+                val videoRect = Rect(0, getStatusBarHeight(), webView.width, getStatusBarHeight() + videoHeight)
+                builder.setSourceRectHint(videoRect)
+            }
+
+            enterPictureInPictureMode(builder.build())
         }
     }
 
@@ -283,8 +585,8 @@ class PlayerActivity : Activity() {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
 
         if (isInPictureInPictureMode) {
-            // PIP 진입: 뒤로가기 버튼 숨기고 비디오를 전체 화면으로
-            backBtn?.visibility = View.GONE
+            // PIP 진입: PiP 버튼 숨기고 비디오를 전체 화면으로
+            pipBtn?.visibility = View.GONE
             webView.evaluateJavascript("""
                 (function() {
                     var video = document.querySelector('video');
@@ -296,12 +598,17 @@ class PlayerActivity : Activity() {
                         style.id = 'ytplayer-pip-style';
                         style.textContent = 'ytm-app, .player-controls-background, .watch-below-the-player, #secondary, .slim-video-metadata-header { display:none !important; } body { background:black !important; overflow:hidden !important; }';
                         document.head.appendChild(style);
+                        // PiP 진입 시 음소거 상태 보존 후 재생 재개
+                        var wasMuted = video.muted;
+                        video.play().then(function() {
+                            video.muted = wasMuted;
+                        }).catch(function(e) { console.log('PiP play failed:', e); });
                     }
                 })();
             """.trimIndent(), null)
         } else {
-            // PIP 복귀: 뒤로가기 버튼 복원, 비디오 스타일 원래대로
-            backBtn?.visibility = View.VISIBLE
+            // PIP 복귀: PiP 버튼 복원, 비디오 스타일 원래대로
+            pipBtn?.visibility = View.VISIBLE
             webView.evaluateJavascript("""
                 (function() {
                     var video = document.querySelector('video');
@@ -328,6 +635,8 @@ class PlayerActivity : Activity() {
     }
 
     override fun onDestroy() {
+        if (currentInstance == this) currentInstance = null
+        timeoutHandler.removeCallbacksAndMessages(null)
         webView.destroy()
         super.onDestroy()
     }

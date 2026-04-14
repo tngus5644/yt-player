@@ -5,6 +5,7 @@ import '../screens/main/main_screen.dart';
 import '../screens/search/search_screen.dart';
 import '../screens/history/history_screen.dart';
 import '../screens/settings/settings_screen.dart';
+import '../screens/playlist/playlist_detail_screen.dart';
 
 final router = GoRouter(
   initialLocation: '/',
@@ -32,6 +33,10 @@ final router = GoRouter(
     GoRoute(
       path: '/settings',
       builder: (context, state) => const SettingsScreen(),
+    ),
+    GoRoute(
+      path: '/playlists',
+      builder: (context, state) => const PlaylistDetailScreen(),
     ),
   ],
 );

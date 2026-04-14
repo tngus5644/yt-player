@@ -1,10 +1,15 @@
 package com.ytplayer.app.overlay
 
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import android.util.Log
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import java.net.URISyntaxException
 
 /**
  * 오버레이 WebView용 WebViewClient
@@ -13,107 +18,165 @@ import android.webkit.WebViewClient
  * 리다이렉트 체인을 팔로잉하고 커스텀 스킴을 감지
  */
 class OverlayWebViewClient(
+    private val context: Context,
     private val maxRedirects: Int = 10,
-    private val onCustomSchemeDetected: (String) -> Unit,
-    private val onTaskCompleted: (Boolean, String) -> Unit
+    private val onLinkProcessed: (LinkResult) -> Unit
 ) : WebViewClient() {
+
+    /**
+     * 링크 처리 결과 (원본: CommProcess.LinkResult)
+     */
+    sealed class LinkResult {
+        object Success : LinkResult()
+        object Fail : LinkResult()
+    }
 
     companion object {
         private const val TAG = "OverlayWebViewClient"
 
-        // 테스트용 커스텀 스킴 목록
-        // 원본 앱: coupang://, aliexpress://, yanoljamotel://, ssg://, emartmall://, ctripglobal://, hotelsapp://
-        // 여기선 더미 스킴만 사용
-        val CUSTOM_SCHEMES = listOf(
-            "testapp://",
-            "dummyshop://",
-            "sampleapp://",
-            "mockstore://",
-            "demoapp://"
+        // 커스텀 스킴 → 패키지명 매핑 (원본 WebViewClientStartCommService 동일)
+        private val SCHEME_PACKAGE_MAP = mapOf(
+            "coupang://" to "com.coupang.mobile",
+            "aliexpress://" to "com.alibaba.aliexpresshd",
+            "yanoljamotel://" to "com.cultsotry.yanolja.nativeapp",
+            "ssg://" to "kr.co.ssg",
+            "emartmall://" to "kr.co.emart.emartmall",
+            "ctripglobal://" to "ctrip.english",
+            "hotelsapp://" to "com.hcom.android"
         )
+
+        private const val SCHEME_INTENT = "intent://"
     }
 
     private var redirectCount = 0
-    private var currentUrl: String = ""
-    private var isCompleted = false
+    private var isProcessed = false
+    private var isStopProcess = false
 
-    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-        val url = request?.url?.toString() ?: return false
-        currentUrl = url
+    fun setStopProcess(stop: Boolean) {
+        isStopProcess = stop
+    }
 
-        Log.d(TAG, "리다이렉트 #$redirectCount → $url")
+    /**
+     * 콜백 중복 호출 방지 (원본: safeProcess)
+     * 한 페이지 로드당 1번만 콜백 호출
+     */
+    private fun safeProcess(result: LinkResult) {
+        if (isProcessed) return
+        isProcessed = true
+        onLinkProcessed(result)
+    }
 
-        // 커스텀 스킴 감지
-        if (isCustomScheme(url)) {
-            Log.d(TAG, "커스텀 스킴 감지: $url")
-            handleCustomScheme(url)
-            return true
-        }
-
-        // 최대 리다이렉트 초과
-        redirectCount++
-        if (redirectCount > maxRedirects) {
-            Log.w(TAG, "최대 리다이렉트 횟수 초과 ($maxRedirects)")
-            completeTask(false, "최대 리다이렉트 초과")
-            return true
-        }
-
-        return false // WebView에서 계속 로딩
+    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+        super.onPageStarted(view, url, favicon)
+        Log.d(TAG, "onPageStarted: $url")
+        redirectCount = 0
+        isProcessed = false
     }
 
     override fun onPageFinished(view: WebView?, url: String?) {
+        Log.d(TAG, "onPageFinished: $url")
         super.onPageFinished(view, url)
-        Log.d(TAG, "페이지 로드 완료: $url (리다이렉트: $redirectCount)")
-
-        // 리다이렉트가 끝나고 최종 페이지에 도달
-        if (!isCompleted && redirectCount > 0) {
-            completeTask(true, "최종 URL: $url")
-        }
     }
 
-    override fun onReceivedError(
-        view: WebView?,
-        errorCode: Int,
-        description: String?,
-        failingUrl: String?
-    ) {
-        Log.e(TAG, "WebView 에러: $errorCode - $description ($failingUrl)")
+    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+        val url = request.url.toString()
+        Log.d(TAG, "shouldOverrideUrlLoading: $url, Redirect Count: $redirectCount")
 
-        // 커스텀 스킴으로 인한 에러는 성공으로 처리
-        if (failingUrl != null && isCustomScheme(failingUrl)) {
-            handleCustomScheme(failingUrl)
-            return
-        }
-
-        completeTask(false, "에러: $description")
-    }
-
-    private fun isCustomScheme(url: String): Boolean {
-        val scheme = Uri.parse(url).scheme ?: return false
-        // http/https가 아닌 스킴은 커스텀 스킴으로 간주
-        if (scheme != "http" && scheme != "https") {
+        // 최대 리다이렉트 초과
+        if (redirectCount > maxRedirects) {
+            Log.e(TAG, "Max redirect count exceeded for: $url")
+            safeProcess(LinkResult.Fail)
             return true
         }
-        return CUSTOM_SCHEMES.any { url.startsWith(it) }
+
+        // 중지 플래그
+        if (isStopProcess) {
+            return false
+        }
+
+        // 커스텀 스킴 매칭 (원본 동일 순서)
+        for ((scheme, pkg) in SCHEME_PACKAGE_MAP) {
+            if (url.startsWith(scheme)) {
+                return handleCustomScheme(url, pkg)
+            }
+        }
+
+        // intent:// 스킴 처리
+        if (url.startsWith(SCHEME_INTENT)) {
+            return handleIntentUri(view, url)
+        }
+
+        redirectCount++
+        return false
     }
 
-    private fun handleCustomScheme(url: String) {
-        if (isCompleted) return
-
-        Log.d(TAG, "커스텀 스킴 처리: $url")
-
-        // 원본 앱에서는 여기서 실제 앱을 실행함
-        // 학습용이므로 감지만 하고 콜백 호출
-        onCustomSchemeDetected(url)
-        completeTask(true, "커스텀 스킴 감지: $url")
+    /**
+     * 커스텀 스킴 처리 (원본 handleCustomScheme 동일)
+     * Intent.ACTION_VIEW로 대상 앱 패키지를 직접 실행
+     */
+    private fun handleCustomScheme(url: String, targetPackage: String): Boolean {
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                setPackage(targetPackage)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            checkAndStartActivity(intent)
+            safeProcess(LinkResult.Success)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "handleCustomScheme 실패: $url", e)
+            safeProcess(LinkResult.Fail)
+            true
+        }
     }
 
-    private fun completeTask(success: Boolean, message: String) {
-        if (isCompleted) return
-        isCompleted = true
+    /**
+     * intent:// URI 처리 (원본 handleIntentUri 동일)
+     * intent:// 스킴을 파싱하여 대상 앱 실행, 없으면 fallback URL 로드
+     */
+    private fun handleIntentUri(view: WebView, url: String): Boolean {
+        return try {
+            val intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME).apply {
+                addCategory(Intent.CATEGORY_BROWSABLE)
+                component = null
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            if (intent.resolveActivity(view.context.packageManager) != null) {
+                checkAndStartActivity(intent)
+                safeProcess(LinkResult.Success)
+                true
+            } else {
+                // 대상 앱 미설치 시 fallback URL 로드
+                val fallbackUrl = intent.getStringExtra("browser_fallback_url")
+                if (!fallbackUrl.isNullOrEmpty()) {
+                    view.loadUrl(fallbackUrl)
+                }
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "handleIntentUri 실패: $url", e)
+            safeProcess(LinkResult.Fail)
+            false
+        }
+    }
 
-        Log.d(TAG, "작업 완료: success=$success, message=$message")
-        onTaskCompleted(success, message)
+    /**
+     * 화면 상태 확인 후 Activity 실행 (원본 checkAndStartActivity 동일)
+     * 화면이 꺼져 있으면 앱 실행을 억제
+     */
+    private fun checkAndStartActivity(intent: Intent) {
+        if (ScreenStateReceiver.isScreenOn) {
+            context.startActivity(intent)
+        } else {
+            Log.d(TAG, "Screen off - suppressed startActivity for ${intent.data}")
+        }
+    }
+
+    override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+        super.onReceivedError(view, request, error)
+        if (request.isForMainFrame) {
+            safeProcess(LinkResult.Fail)
+        }
     }
 
     /**
@@ -121,7 +184,6 @@ class OverlayWebViewClient(
      */
     fun reset() {
         redirectCount = 0
-        currentUrl = ""
-        isCompleted = false
+        isProcessed = false
     }
 }

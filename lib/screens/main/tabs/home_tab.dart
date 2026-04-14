@@ -12,7 +12,6 @@ class HomeTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final videoList = ref.watch(homeVideoListProvider);
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -44,16 +43,18 @@ class HomeTab extends ConsumerWidget {
                   ref.read(homeVideoListProvider.notifier).loadHomeFeed(),
             );
           }
+          final notifier = ref.read(homeVideoListProvider.notifier);
+          final hasMore = notifier.hasMore;
           return RefreshIndicator(
             onRefresh: () =>
-                ref.read(homeVideoListProvider.notifier).loadHomeFeed(),
+                ref.read(homeVideoListProvider.notifier).loadHomeFeed(isRefresh: true),
             child: ListView.builder(
-              itemCount: videos.length + 1,
+              itemCount: hasMore ? videos.length + 1 : videos.length,
               itemBuilder: (context, index) {
                 if (index == videos.length) {
                   // 마지막 아이템 → 더 로드
                   WidgetsBinding.instance.addPostFrameCallback((_) {
-                    ref.read(homeVideoListProvider.notifier).loadMore();
+                    notifier.loadMore();
                   });
                   return const Padding(
                     padding: EdgeInsets.all(16),
@@ -63,9 +64,9 @@ class HomeTab extends ConsumerWidget {
                 return VideoCard(
                   video: videos[index],
                   onTap: () {
-                    ref
-                        .read(webViewChannelProvider)
-                        .playVideo(videos[index].youtubeUrl);
+                    ref.read(webViewChannelProvider).playVideo(
+                      'https://m.youtube.com/watch?v=${videos[index].id}',
+                    );
                   },
                 );
               },

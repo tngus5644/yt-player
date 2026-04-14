@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// 오버레이 WebView 서비스 제어 채널
@@ -12,8 +11,7 @@ class OverlayChannel {
     try {
       final result = await _channel.invokeMethod<bool>('startOverlayService');
       return result ?? false;
-    } on PlatformException catch (e) {
-      debugPrint('오버레이 서비스 시작 실패: ${e.message}');
+    } on PlatformException {
       return false;
     }
   }
@@ -23,8 +21,7 @@ class OverlayChannel {
     try {
       final result = await _channel.invokeMethod<bool>('stopOverlayService');
       return result ?? false;
-    } on PlatformException catch (e) {
-      debugPrint('오버레이 서비스 중지 실패: ${e.message}');
+    } on PlatformException {
       return false;
     }
   }
@@ -54,8 +51,8 @@ class OverlayChannel {
   static Future<void> requestOverlayPermission() async {
     try {
       await _channel.invokeMethod('requestOverlayPermission');
-    } on PlatformException catch (e) {
-      debugPrint('오버레이 권한 요청 실패: ${e.message}');
+    } on PlatformException {
+      // 권한 요청 실패 시 무시
     }
   }
 }

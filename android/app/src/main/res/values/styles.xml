@@ -17,11 +17,11 @@
     </style>
 
     <!-- PlayerActivity 전체화면 테마 -->
-    <style name="PlayerTheme" parent="@android:style/Theme.Black.NoTitleBar.Fullscreen">
+    <style name="PlayerTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowActionBar">false</item>
-        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowFullscreen">false</item>
         <item name="android:windowContentOverlay">@null</item>
     </style>
 </resources>

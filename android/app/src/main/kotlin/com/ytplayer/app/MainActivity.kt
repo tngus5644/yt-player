@@ -13,12 +13,15 @@ import io.flutter.plugin.common.MethodChannel
 import com.ytplayer.app.channel.WebViewMethodChannel
 import com.ytplayer.app.channel.DataEventChannel
 import com.ytplayer.app.overlay.OverlayWebViewService
+import com.ytplayer.app.shorts.ShortsPlatformView
+import com.ytplayer.app.shorts.ShortsPlatformViewFactory
 import com.ytplayer.app.webview.WebViewManager
 
 class MainActivity : FlutterActivity() {
 
     private lateinit var webViewMethodChannel: WebViewMethodChannel
     private lateinit var dataEventChannel: DataEventChannel
+    private var currentShortsView: ShortsPlatformView? = null
 
     companion object {
         private const val TAG = "MainActivity"
@@ -26,11 +29,18 @@ class MainActivity : FlutterActivity() {
         const val EVENT_CHANNEL = "com.ytplayer/data"
         const val PLAYER_CHANNEL = "com.ytplayer/player"
         const val OVERLAY_CHANNEL = "com.ytplayer/overlay"
+        const val SHORTS_CHANNEL = "com.ytplayer/shorts"
         private const val OVERLAY_PERMISSION_REQUEST_CODE = 1234
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        // Shorts PlatformView 등록
+        flutterEngine.platformViewsController.registry.registerViewFactory(
+            "shorts-webview",
+            ShortsPlatformViewFactory { view -> currentShortsView = view }
+        )
 
         // 데이터 이벤트 채널 (Native → Flutter 스트림)
         dataEventChannel = DataEventChannel()
@@ -84,6 +94,22 @@ class MainActivity : FlutterActivity() {
                     }
                     "requestOverlayPermission" -> {
                         requestOverlayPermission()
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // 쇼츠 제어 채널 (Flutter → Native: pause/resume)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHORTS_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "pauseShorts" -> {
+                        currentShortsView?.pauseVideo()
+                        result.success(null)
+                    }
+                    "resumeShorts" -> {
+                        currentShortsView?.resumeVideo()
                         result.success(null)
                     }
                     else -> result.notImplemented()

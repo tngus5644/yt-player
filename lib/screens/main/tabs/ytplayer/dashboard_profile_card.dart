@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -35,7 +36,6 @@ class DashboardProfileCard extends ConsumerWidget {
     final photoUrl = user?.photoUrl;
     final displayName = user?.displayName ?? '';
     final email = user?.email ?? '로그인됨';
-    debugPrint('[ProfileCard] photoUrl=$photoUrl, name=$displayName');
 
     return Row(
       children: [
@@ -45,16 +45,15 @@ class DashboardProfileCard extends ConsumerWidget {
           child: photoUrl == null || photoUrl.isEmpty
               ? const Icon(Icons.person, color: AppColors.primary, size: 22)
               : ClipOval(
-                  child: Image.network(
-                    photoUrl,
+                  child: CachedNetworkImage(
+                    imageUrl: photoUrl,
                     width: 36,
                     height: 36,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stack) {
-                      debugPrint('[ProfileCard] image load FAIL: $error');
-                      return const Icon(Icons.person,
-                          color: AppColors.primary, size: 22);
-                    },
+                    placeholder: (_, __) => const Icon(Icons.person,
+                        color: AppColors.primary, size: 22),
+                    errorWidget: (_, __, ___) => const Icon(Icons.person,
+                        color: AppColors.primary, size: 22),
                   ),
                 ),
         ),

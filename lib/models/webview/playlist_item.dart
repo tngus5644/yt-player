@@ -17,6 +17,16 @@ class PlaylistItem {
     this.channelTitle = '',
   });
 
+  PlaylistItem copyWith({int? videoCount}) => PlaylistItem(
+        playlistId: playlistId,
+        title: title,
+        thumbnail: thumbnail,
+        videoCount: videoCount ?? this.videoCount,
+        visibility: visibility,
+        updatedAt: updatedAt,
+        channelTitle: channelTitle,
+      );
+
   factory PlaylistItem.fromJson(Map<String, dynamic> json) {
     return PlaylistItem(
       playlistId: json['playlistId'] as String? ?? '',

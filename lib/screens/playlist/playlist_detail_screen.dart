@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../models/webview/playlist_item.dart';
 import '../../providers/webview_provider.dart';
 
@@ -101,7 +102,10 @@ class _PlaylistListTile extends StatelessWidget {
 
     return InkWell(
       onTap: () {
-        // TODO: 재생목록 동영상 목록 화면으로 이동
+        context.push(
+          '/playlist/${playlist.playlistId}',
+          extra: {'title': playlist.title},
+        );
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -133,25 +137,26 @@ class _PlaylistListTile extends StatelessWidget {
                         color: Colors.grey[800],
                         child: const Icon(Icons.playlist_play,
                             color: Colors.grey, size: 40)),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      color: Colors.black54,
-                      child: Row(
-                        children: [
-                          const Icon(Icons.playlist_play,
-                              size: 14, color: Colors.white),
-                          const SizedBox(width: 4),
-                          Text('동영상 ${playlist.videoCount}개',
-                              style: const TextStyle(
-                                  fontSize: 11, color: Colors.white)),
-                        ],
+                  if (playlist.videoCount > 0)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        color: Colors.black54,
+                        child: Row(
+                          children: [
+                            const Icon(Icons.playlist_play,
+                                size: 14, color: Colors.white),
+                            const SizedBox(width: 4),
+                            Text('동영상 ${playlist.videoCount}개',
+                                style: const TextStyle(
+                                    fontSize: 11, color: Colors.white)),
+                          ],
+                        ),
                       ),
-                    ),
                   ),
                 ],
               ),

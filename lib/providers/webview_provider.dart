@@ -584,6 +584,7 @@ class LoginStateNotifier extends StateNotifier<bool> {
 class LibraryDataNotifier extends StateNotifier<AsyncValue<LibraryData>> {
   final WebViewChannel _channel;
   StreamSubscription? _sub;
+  StreamSubscription? _detailSub;
   Completer<void>? _loadCompleter;
   Timer? _timeoutTimer;
 
@@ -591,6 +592,10 @@ class LibraryDataNotifier extends StateNotifier<AsyncValue<LibraryData>> {
     _sub = _channel.dataStream
         .where((e) => e.type == WebViewEventType.libraryData)
         .listen(_onData);
+    // playlistDetail 이벤트로 카운트 보정 (사용자가 들어가지 않아도 자동 갱신)
+    _detailSub = _channel.dataStream
+        .where((e) => e.type == WebViewEventType.playlistDetail)
+        .listen(_onPlaylistDetail);
   }
 
   void _onData(WebViewEvent event) {
@@ -599,6 +604,24 @@ class LibraryDataNotifier extends StateNotifier<AsyncValue<LibraryData>> {
     state = AsyncValue.data(data);
     _loadCompleter?.complete();
     _loadCompleter = null;
+    _autoFetchMissingCounts(data);
+  }
+
+  /// 카운트가 0인 playlist에 대해 백그라운드로 상세 호출 → 결과 도착 시 카운트 갱신
+  void _autoFetchMissingCounts(LibraryData data) {
+    var fired = 0;
+    for (final p in data.playlists) {
+      if (p.videoCount > 0) continue;
+      _channel.loadPlaylistDetail(p.playlistId);
+      if (++fired >= 5) break; // 과도한 호출 방지
+    }
+  }
+
+  void _onPlaylistDetail(WebViewEvent event) {
+    final id = event.data?['playlistId'] as String?;
+    final list = event.data?['videoList'] as List?;
+    if (id == null || list == null) return;
+    updatePlaylistVideoCount(id, list.length);
   }
 
   Future<void> load() async {
@@ -622,9 +645,36 @@ class LibraryDataNotifier extends StateNotifier<AsyncValue<LibraryData>> {
     return completer.future;
   }
 
+  /// 재생목록 영상 수 갱신 (상세 화면 진입 후 실제 카운트로 보정)
+  void updatePlaylistVideoCount(String playlistId, int count) {
+    final current = state.valueOrNull;
+    if (current == null) {
+      debugPrint('[Library] updatePlaylistVideoCount: state empty, skip');
+      return;
+    }
+    var changed = false;
+    final updated = current.playlists.map((p) {
+      if (p.playlistId == playlistId && p.videoCount != count) {
+        debugPrint('[Library] $playlistId: ${p.videoCount} → $count');
+        changed = true;
+        return p.copyWith(videoCount: count);
+      }
+      return p;
+    }).toList();
+    if (changed) {
+      state = AsyncValue.data(LibraryData(
+        historyVideos: current.historyVideos,
+        playlists: updated,
+      ));
+    } else {
+      debugPrint('[Library] updatePlaylistVideoCount: no match for $playlistId');
+    }
+  }
+
   @override
   void dispose() {
     _sub?.cancel();
+    _detailSub?.cancel();
     _timeoutTimer?.cancel();
     super.dispose();
   }

@@ -334,7 +334,10 @@ class _PlaylistRow extends StatelessWidget {
           final playlist = playlists[index];
           return GestureDetector(
             onTap: () {
-              context.push('/playlists');
+              context.push(
+                '/playlist/${playlist.playlistId}',
+                extra: {'title': playlist.title},
+              );
             },
             child: Container(
               width: 160,
@@ -384,18 +387,20 @@ class _PlaylistRow extends StatelessWidget {
                                 ],
                               ),
                             ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.playlist_play,
-                                    size: 16, color: Colors.white),
-                                const SizedBox(width: 4),
-                                Text('동영상 ${playlist.videoCount}개',
-                                    style: const TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w500)),
-                              ],
-                            ),
+                            child: playlist.videoCount > 0
+                                ? Row(
+                                    children: [
+                                      const Icon(Icons.playlist_play,
+                                          size: 16, color: Colors.white),
+                                      const SizedBox(width: 4),
+                                      Text('동영상 ${playlist.videoCount}개',
+                                          style: const TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w500)),
+                                    ],
+                                  )
+                                : const SizedBox.shrink(),
                           ),
                         ),
                       ],

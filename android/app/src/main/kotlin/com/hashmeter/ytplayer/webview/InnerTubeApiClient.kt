@@ -255,11 +255,50 @@ class InnerTubeApiClient {
      * playlistVideoRenderer ∈ RENDERER_KEYS → 기존 callApi 재사용
      */
     fun fetchPlaylistDetail(playlistId: String): BrowseResult {
+        val browseId = if (playlistId.startsWith("VL")) playlistId else "VL$playlistId"
+        Log.d(TAG, "★ fetchPlaylistDetail browseId=$browseId")
         val body = buildRequestBody("WEB", WebViewManager.WEB_CLIENT_VERSION).apply {
-            put("browseId", "VL$playlistId")
+            put("browseId", browseId)
         }
 
-        return callApi("$BASE_URL/browse?key=${WebViewManager.INNERTUBE_API_KEY}&prettyPrint=false", body)
+        val result = callApi("$BASE_URL/browse?key=${WebViewManager.INNERTUBE_API_KEY}&prettyPrint=false", body)
+        if (result.videos.length() > 0) return result
+
+        // 1차 실패 폴백: 직접 응답을 받아 playlistVideoRenderer/lockupViewModel을 트리 전체에서 재추출
+        Log.w(TAG, "★ playlist 1차 0개 → 직접 호출 폴백")
+        val conn = createConnection("$BASE_URL/browse?key=${WebViewManager.INNERTUBE_API_KEY}&prettyPrint=false")
+        return try {
+            conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            if (conn.responseCode != 200) {
+                Log.w(TAG, "★ 폴백 응답 코드: ${conn.responseCode}")
+                return BrowseResult(JSONArray(), null)
+            }
+            val raw = conn.inputStream.bufferedReader().readText()
+            val root = JSONObject(raw)
+            Log.d(TAG, "★ 폴백 응답 길이=${raw.length}, 키=${root.keys().asSequence().toList()}")
+
+            val videos = mutableListOf<VideoMeta>()
+            val seen = mutableSetOf<String>()
+            extractVideosFromRenderers(root, videos, seen, 0)
+
+            // playlistVideoRenderer 누락 대비: videoId 정규식 폴백
+            if (videos.isEmpty()) {
+                val regex = """"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"""".toRegex()
+                regex.findAll(raw).forEach { m ->
+                    val id = m.groupValues[1]
+                    if (id !in seen) { seen.add(id); videos.add(VideoMeta(id)) }
+                }
+                Log.d(TAG, "★ regex 폴백으로 ${videos.size}개 확보")
+            }
+
+            Log.d(TAG, "★ 최종 playlist videos=${videos.size}")
+            BrowseResult(videosToJsonArray(videos.take(MAX_VIDEOS)), null)
+        } catch (e: Exception) {
+            Log.e(TAG, "★ 폴백 에러", e)
+            BrowseResult(JSONArray(), null)
+        } finally {
+            conn.disconnect()
+        }
     }
 
     /**
@@ -1518,7 +1557,8 @@ class InnerTubeApiClient {
                 return thumbs.getJSONObject(0).optString("url", "")
             }
         }
-        return ""
+        // 폴백: 트리 전체에서 yt3 도메인 URL 재귀 탐색 (playlistVideoRenderer 등 대비)
+        return extractLockupChannelThumbnail(renderer)
     }
 
     /**

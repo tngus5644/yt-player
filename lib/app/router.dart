@@ -6,6 +6,7 @@ import '../screens/search/search_screen.dart';
 import '../screens/history/history_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/playlist/playlist_detail_screen.dart';
+import '../screens/playlist/playlist_videos_screen.dart';
 
 final router = GoRouter(
   initialLocation: '/',
@@ -37,6 +38,13 @@ final router = GoRouter(
     GoRoute(
       path: '/playlists',
       builder: (context, state) => const PlaylistDetailScreen(),
+    ),
+    GoRoute(
+      path: '/playlist/:id',
+      builder: (context, state) => PlaylistVideosScreen(
+        playlistId: state.pathParameters['id'] ?? '',
+        title: (state.extra as Map<String, dynamic>?)?['title'] as String? ?? '재생목록',
+      ),
     ),
   ],
 );

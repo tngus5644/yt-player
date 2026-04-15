@@ -18,6 +18,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.WindowInsetsController
+import android.view.WindowManager
 import android.webkit.*
 import android.widget.FrameLayout
 import android.widget.ImageButton
@@ -263,23 +264,20 @@ class PlayerActivity : Activity() {
             text = ""
         }
 
-        val shareBtn = ImageButton(this).apply {
+        val screenOffBtn = ImageButton(this).apply {
             layoutParams = FrameLayout.LayoutParams(btn, btn).apply {
                 gravity = Gravity.END or Gravity.CENTER_VERTICAL
                 rightMargin = btn + (4 * density).toInt()
             }
             background = null
             setImageDrawable(strokeIcon { canvas, w, h, paint ->
-                val s = minOf(w, h) * 0.18f
-                // 점 3개 + 연결선 (공유 아이콘 단순화)
-                canvas.drawCircle(w / 2 - s * 1.4f, h / 2 + s, s * 0.5f, paint)
-                canvas.drawCircle(w / 2 + s * 1.4f, h / 2 - s * 1.4f, s * 0.5f, paint)
-                canvas.drawCircle(w / 2 + s * 1.4f, h / 2 + s * 2.4f, s * 0.5f, paint)
-                canvas.drawLine(w / 2 - s * 1.0f, h / 2 + s * 0.7f, w / 2 + s * 1.0f, h / 2 - s * 1.1f, paint)
-                canvas.drawLine(w / 2 - s * 1.0f, h / 2 + s * 1.3f, w / 2 + s * 1.0f, h / 2 + s * 2.1f, paint)
+                val s = minOf(w, h) * 0.22f
+                // 달/전원 모양: 원호 + 위쪽 작은 선
+                canvas.drawArc(w / 2 - s, h / 2 - s, w / 2 + s, h / 2 + s, 60f, 240f, false, paint)
+                canvas.drawLine(w / 2, h / 2 - s, w / 2, h / 2 - s * 0.4f, paint)
             })
             scaleType = ImageView.ScaleType.CENTER
-            setOnClickListener { shareCurrentUrl() }
+            setOnClickListener { enableScreenOffMode() }
         }
 
         pipBtn = ImageButton(this).apply {
@@ -301,7 +299,7 @@ class PlayerActivity : Activity() {
         topBar?.apply {
             addView(backBtn)
             addView(titleText)
-            addView(shareBtn)
+            addView(screenOffBtn)
             addView(pipBtn)
         }
         fullscreenContainer.addView(topBar)
@@ -327,13 +325,50 @@ class PlayerActivity : Activity() {
         }
     }
 
-    private fun shareCurrentUrl() {
-        val url = webView.url ?: return
-        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(android.content.Intent.EXTRA_TEXT, url)
+    private var screenOffOverlay: FrameLayout? = null
+
+    /**
+     * 화면 끄기 모드: 화면 밝기를 최소로 낮추고 검은 오버레이를 띄워
+     * 영상 화면을 끈 채로 오디오만 계속 재생되도록 한다. 오버레이 탭 시 복원.
+     */
+    private fun enableScreenOffMode() {
+        if (screenOffOverlay != null) return
+
+        window.attributes = window.attributes.apply {
+            screenBrightness = 0.01f
         }
-        startActivity(android.content.Intent.createChooser(intent, "공유"))
+
+        val density = resources.displayMetrics.density
+        screenOffOverlay = FrameLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(Color.BLACK)
+            elevation = 100 * density
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { disableScreenOffMode() }
+
+            addView(TextView(context).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { gravity = Gravity.CENTER }
+                setTextColor(Color.argb(140, 255, 255, 255))
+                textSize = 14f
+                text = "탭하여 화면 켜기"
+            })
+        }
+        fullscreenContainer.addView(screenOffOverlay)
+    }
+
+    private fun disableScreenOffMode() {
+        screenOffOverlay?.let { fullscreenContainer.removeView(it) }
+        screenOffOverlay = null
+        window.attributes = window.attributes.apply {
+            screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        }
     }
 
     /**

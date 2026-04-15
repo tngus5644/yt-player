@@ -1365,13 +1365,16 @@ class InnerTubeApiClient {
                 ?.optString("onTap", "")
                 ?.contains("reel", ignoreCase = true) == true
 
-        Log.d(TAG, "lockupViewModel 파싱: $vid → '$title' / '$channel' / '$viewCount'")
+        // 채널 아바타: lockupMetadataViewModel.image.decoratedAvatarViewModel.avatar.avatarViewModel.image.sources[]
+        val channelThumb = extractLockupChannelThumbnail(metadataObj)
+
+        Log.d(TAG, "lockupViewModel 파싱: $vid → '$title' / '$channel' / '$viewCount' / avatar=${channelThumb.take(60)}")
 
         videos.add(VideoMeta(
             id = vid,
             title = title.take(200),
             channel = channel.take(100),
-            channelThumbnail = "",
+            channelThumbnail = channelThumb,
             thumbnail = thumbUrl,
             duration = duration,
             viewCount = viewCount,
@@ -1466,6 +1469,38 @@ class InnerTubeApiClient {
     }
 
     // ==================== JSON Helpers ====================
+
+    /**
+     * lockupMetadataViewModel 트리에서 채널 아바타 URL을 재귀 탐색.
+     * 위치 변형이 잦아(decoratedAvatarViewModel / avatarViewModel / image.sources)
+     * 트리 어디든 sources URL이 yt3.ggpht.com 도메인이면 채택.
+     */
+    private fun extractLockupChannelThumbnail(metadataObj: JSONObject?): String {
+        if (metadataObj == null) return ""
+        var found = ""
+        fun visit(node: Any?) {
+            if (found.isNotEmpty()) return
+            when (node) {
+                is JSONObject -> {
+                    val sources = node.optJSONArray("sources")
+                    if (sources != null) {
+                        for (i in 0 until sources.length()) {
+                            val url = sources.optJSONObject(i)?.optString("url", "") ?: ""
+                            if (url.contains("yt3.ggpht.com") || url.contains("yt3.googleusercontent.com")) {
+                                found = url
+                                return
+                            }
+                        }
+                    }
+                    val keys = node.keys()
+                    while (keys.hasNext()) visit(node.opt(keys.next()))
+                }
+                is JSONArray -> for (i in 0 until node.length()) visit(node.opt(i))
+            }
+        }
+        visit(metadataObj)
+        return found
+    }
 
     private fun extractChannelThumbnail(renderer: JSONObject): String {
         val ctsr = renderer.optJSONObject("channelThumbnailSupportedRenderers")

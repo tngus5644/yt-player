@@ -35,17 +35,28 @@ class DashboardProfileCard extends ConsumerWidget {
     final photoUrl = user?.photoUrl;
     final displayName = user?.displayName ?? '';
     final email = user?.email ?? '로그인됨';
+    debugPrint('[ProfileCard] photoUrl=$photoUrl, name=$displayName');
 
     return Row(
       children: [
         CircleAvatar(
           radius: 18,
-          backgroundImage:
-              photoUrl != null ? NetworkImage(photoUrl) : null,
           backgroundColor: AppColors.primary.withValues(alpha: 0.15),
-          child: photoUrl == null
+          child: photoUrl == null || photoUrl.isEmpty
               ? const Icon(Icons.person, color: AppColors.primary, size: 22)
-              : null,
+              : ClipOval(
+                  child: Image.network(
+                    photoUrl,
+                    width: 36,
+                    height: 36,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stack) {
+                      debugPrint('[ProfileCard] image load FAIL: $error');
+                      return const Icon(Icons.person,
+                          color: AppColors.primary, size: 22);
+                    },
+                  ),
+                ),
         ),
         const SizedBox(width: 12),
         Expanded(

@@ -202,15 +202,15 @@ class _PermissionPageState extends State<_PermissionPage>
   static const _items = <_PermissionItem>[
     _PermissionItem(
       permission: Permission.systemAlertWindow,
-      icon: Icons.layers_outlined,
+      icon: Icons.picture_in_picture_alt_outlined,
       title: '다른 앱 위에 표시',
-      description: '백그라운드에서 페이지 방문을 위한 필수 권한입니다',
+      description: 'PIP 모드(화면 속 화면)로 다른 앱을 쓰면서 영상을 계속 보기 위해 필요합니다',
     ),
     _PermissionItem(
       permission: Permission.ignoreBatteryOptimizations,
       icon: Icons.battery_charging_full_outlined,
       title: '배터리 최적화 제외',
-      description: '기기가 절전 중일 때도 포인트가 안정적으로 적립됩니다',
+      description: '화면을 꺼도 백그라운드 재생이 끊기지 않도록 합니다',
     ),
   ];
 

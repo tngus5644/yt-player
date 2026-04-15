@@ -177,6 +177,36 @@ class ShortsPlatformView(
                 observer.observe(document.documentElement, {
                     childList: true, subtree: true
                 });
+
+                // ========== 3. 영상 등장 시 자동 음소거 해제 ==========
+                function unmuteAll() {
+                    var videos = document.querySelectorAll('video');
+                    for (var i = 0; i < videos.length; i++) {
+                        try {
+                            videos[i].muted = false;
+                            videos[i].volume = 1.0;
+                        } catch (e) {}
+                    }
+
+                    // "탭하여 음소거 해제" 버튼 자동 클릭
+                    var labels = ['음소거 해제', 'unmute', 'tap to unmute'];
+                    var candidates = document.querySelectorAll(
+                        'button, [role="button"], .ytp-unmute, .ytp-unmute-button'
+                    );
+                    for (var j = 0; j < candidates.length; j++) {
+                        var el = candidates[j];
+                        var aria = (el.getAttribute('aria-label') || '').toLowerCase();
+                        var text = (el.textContent || '').toLowerCase();
+                        for (var k = 0; k < labels.length; k++) {
+                            if (aria.indexOf(labels[k]) !== -1 || text.indexOf(labels[k]) !== -1) {
+                                try { el.click(); } catch (e) {}
+                                break;
+                            }
+                        }
+                    }
+                }
+                setInterval(unmuteAll, 500);
+                document.addEventListener('play', unmuteAll, true);
             })();
         """.trimIndent(), null)
     }

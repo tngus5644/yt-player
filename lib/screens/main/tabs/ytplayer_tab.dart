@@ -4,13 +4,10 @@ import '../../../core/constants/app_colors.dart';
 import '../../../providers/reward_provider.dart';
 import '../../../providers/webview_provider.dart';
 import 'ytplayer/dashboard_profile_card.dart';
-import 'ytplayer/dashboard_balance_section.dart';
 import 'ytplayer/dashboard_notice_section.dart';
 import 'ytplayer/dashboard_info_banner.dart';
 import 'ytplayer/dashboard_reward_shop_section.dart';
-import 'ytplayer/dashboard_chart_section.dart';
 import 'ytplayer/dashboard_usage_history_section.dart';
-import 'ytplayer/dashboard_earning_history_section.dart';
 
 class YTPlayerTab extends ConsumerStatefulWidget {
   const YTPlayerTab({super.key});
@@ -24,8 +21,6 @@ class _YTPlayerTabState extends ConsumerState<YTPlayerTab> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(balanceProvider.notifier).fetch();
-      ref.read(rewardChartProvider.notifier).fetch();
       ref.read(noticeProvider.notifier).fetch();
       ref.read(rewardListProvider.notifier).fetch();
       ref.read(rewardUsagesProvider.notifier).fetch();
@@ -34,8 +29,6 @@ class _YTPlayerTabState extends ConsumerState<YTPlayerTab> {
 
   Future<void> _onRefresh() async {
     await Future.wait([
-      ref.read(balanceProvider.notifier).fetch(),
-      ref.read(rewardChartProvider.notifier).fetch(),
       ref.read(noticeProvider.notifier).fetch(),
       ref.read(rewardListProvider.notifier).fetch(),
       ref.read(rewardUsagesProvider.notifier).fetch(),
@@ -87,18 +80,13 @@ class _YTPlayerTabState extends ConsumerState<YTPlayerTab> {
                 onLogout: _showLogoutDialog,
               ),
               const SizedBox(height: 16),
-              const DashboardBalanceSection(),
-              const SizedBox(height: 16),
               const DashboardNoticeSection(),
               const SizedBox(height: 16),
               const DashboardInfoBanner(),
               const SizedBox(height: 20),
               const DashboardRewardShopSection(),
               const SizedBox(height: 20),
-              const DashboardChartSection(),
               const DashboardUsageHistorySection(),
-              const SizedBox(height: 20),
-              const DashboardEarningHistorySection(),
               const SizedBox(height: 32),
             ],
           ),

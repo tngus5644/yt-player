@@ -44,6 +44,8 @@ class PlayerActivity : Activity() {
     private lateinit var webView: WebView
     private lateinit var fullscreenContainer: FrameLayout
     private var pipBtn: ImageButton? = null
+    private var topBar: FrameLayout? = null
+    private var titleText: TextView? = null
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
 
@@ -87,6 +89,7 @@ class PlayerActivity : Activity() {
         }
 
         initWebView()
+        initTopBar()
         initLoadingOverlay()
         initErrorOverlay()
 
@@ -114,11 +117,13 @@ class PlayerActivity : Activity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun initWebView() {
+        val density = resources.displayMetrics.density
+        val topInset = (48 * density).toInt()
         webView = WebView(this).apply {
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
-            )
+            ).apply { topMargin = topInset }
 
             settings.apply {
                 javaScriptEnabled = true
@@ -174,6 +179,15 @@ class PlayerActivity : Activity() {
             }
 
             webChromeClient = object : WebChromeClient() {
+                override fun onReceivedTitle(view: WebView?, title: String?) {
+                    super.onReceivedTitle(view, title)
+                    val cleaned = title
+                        ?.replace(Regex("\\s*-?\\s*YouTube\\s*$", RegexOption.IGNORE_CASE), "")
+                        ?.trim()
+                        ?: ""
+                    titleText?.text = cleaned
+                }
+
                 override fun onShowCustomView(
                     view: android.view.View?,
                     callback: CustomViewCallback?
@@ -197,48 +211,153 @@ class PlayerActivity : Activity() {
         }
 
         fullscreenContainer.addView(webView)
+    }
 
-        // PiP 전환 버튼 오버레이 (아래 쉐브론 ∨)
+    /**
+     * 상단 AppBar: 뒤로가기 + 영상 제목 + 공유 + PiP
+     */
+    private fun initTopBar() {
         val density = resources.displayMetrics.density
-        val btnSize = (40 * density).toInt()
-        pipBtn = ImageButton(this).apply {
-            layoutParams = FrameLayout.LayoutParams(btnSize, btnSize).apply {
-                gravity = Gravity.TOP or Gravity.START
-                topMargin = getStatusBarHeight() + (8 * density).toInt()
-                leftMargin = (12 * density).toInt()
-            }
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.argb(160, 0, 0, 0))
-            }
-            setImageDrawable(object : Drawable() {
-                private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = Color.WHITE
-                    style = Paint.Style.STROKE
-                    strokeWidth = 2.5f * density
-                    strokeCap = Paint.Cap.ROUND
-                    strokeJoin = Paint.Join.ROUND
-                }
-                override fun draw(canvas: Canvas) {
-                    val w = bounds.width().toFloat()
-                    val h = bounds.height().toFloat()
-                    val s = minOf(w, h) * 0.22f
-                    // 아래 방향 쉐브론: ∨
-                    canvas.drawLine(w / 2 - s, h / 2 - s * 0.4f, w / 2, h / 2 + s * 0.6f, paint)
-                    canvas.drawLine(w / 2, h / 2 + s * 0.6f, w / 2 + s, h / 2 - s * 0.4f, paint)
-                }
-                override fun setAlpha(alpha: Int) {}
-                override fun setColorFilter(colorFilter: ColorFilter?) {}
-                @Deprecated("Deprecated in Java")
-                override fun getOpacity() = PixelFormat.TRANSLUCENT
-            })
-            scaleType = ImageView.ScaleType.CENTER
-            val pad = (6 * density).toInt()
-            setPadding(pad, pad, pad, pad)
-            setOnClickListener { enterPipMode() }
+        val statusH = getStatusBarHeight()
+        val barH = (48 * density).toInt()
+        val btn = (40 * density).toInt()
+
+        topBar = FrameLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                statusH + barH
+            ).apply { gravity = Gravity.TOP }
+            setPadding(0, statusH, 0, 0)
+            setBackgroundColor(Color.argb(140, 0, 0, 0))
             elevation = 8 * density
         }
-        fullscreenContainer.addView(pipBtn)
+
+        val backBtn = ImageButton(this).apply {
+            layoutParams = FrameLayout.LayoutParams(btn, btn).apply {
+                gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                leftMargin = (4 * density).toInt()
+            }
+            background = null
+            setImageDrawable(strokeIcon { canvas, w, h, paint ->
+                val s = minOf(w, h) * 0.22f
+                canvas.drawLine(w / 2 + s * 0.6f, h / 2 - s, w / 2 - s * 0.4f, h / 2, paint)
+                canvas.drawLine(w / 2 - s * 0.4f, h / 2, w / 2 + s * 0.6f, h / 2 + s, paint)
+            })
+            scaleType = ImageView.ScaleType.CENTER
+            setOnClickListener { finish() }
+        }
+
+        titleText = TextView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            ).apply {
+                leftMargin = btn + (8 * density).toInt()
+                rightMargin = btn * 2 + (8 * density).toInt()
+            }
+            gravity = Gravity.CENTER_VERTICAL
+            setTextColor(Color.WHITE)
+            textSize = 14f
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            text = ""
+        }
+
+        val shareBtn = ImageButton(this).apply {
+            layoutParams = FrameLayout.LayoutParams(btn, btn).apply {
+                gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                rightMargin = btn + (4 * density).toInt()
+            }
+            background = null
+            setImageDrawable(strokeIcon { canvas, w, h, paint ->
+                val s = minOf(w, h) * 0.18f
+                // 점 3개 + 연결선 (공유 아이콘 단순화)
+                canvas.drawCircle(w / 2 - s * 1.4f, h / 2 + s, s * 0.5f, paint)
+                canvas.drawCircle(w / 2 + s * 1.4f, h / 2 - s * 1.4f, s * 0.5f, paint)
+                canvas.drawCircle(w / 2 + s * 1.4f, h / 2 + s * 2.4f, s * 0.5f, paint)
+                canvas.drawLine(w / 2 - s * 1.0f, h / 2 + s * 0.7f, w / 2 + s * 1.0f, h / 2 - s * 1.1f, paint)
+                canvas.drawLine(w / 2 - s * 1.0f, h / 2 + s * 1.3f, w / 2 + s * 1.0f, h / 2 + s * 2.1f, paint)
+            })
+            scaleType = ImageView.ScaleType.CENTER
+            setOnClickListener { shareCurrentUrl() }
+        }
+
+        pipBtn = ImageButton(this).apply {
+            layoutParams = FrameLayout.LayoutParams(btn, btn).apply {
+                gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                rightMargin = (4 * density).toInt()
+            }
+            background = null
+            setImageDrawable(strokeIcon { canvas, w, h, paint ->
+                val s = minOf(w, h) * 0.22f
+                // 아래 방향 쉐브론
+                canvas.drawLine(w / 2 - s, h / 2 - s * 0.4f, w / 2, h / 2 + s * 0.6f, paint)
+                canvas.drawLine(w / 2, h / 2 + s * 0.6f, w / 2 + s, h / 2 - s * 0.4f, paint)
+            })
+            scaleType = ImageView.ScaleType.CENTER
+            setOnClickListener { enterPipMode() }
+        }
+
+        topBar?.apply {
+            addView(backBtn)
+            addView(titleText)
+            addView(shareBtn)
+            addView(pipBtn)
+        }
+        fullscreenContainer.addView(topBar)
+    }
+
+    private fun strokeIcon(draw: (Canvas, Float, Float, Paint) -> Unit): Drawable {
+        val density = resources.displayMetrics.density
+        return object : Drawable() {
+            private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                style = Paint.Style.STROKE
+                strokeWidth = 2.5f * density
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+            }
+            override fun draw(canvas: Canvas) {
+                draw(canvas, bounds.width().toFloat(), bounds.height().toFloat(), paint)
+            }
+            override fun setAlpha(alpha: Int) {}
+            override fun setColorFilter(colorFilter: ColorFilter?) {}
+            @Deprecated("Deprecated in Java")
+            override fun getOpacity() = PixelFormat.TRANSLUCENT
+        }
+    }
+
+    /**
+     * 현재 video.currentTime을 가져와 URL의 t= 파라미터로 박은 뒤 reload.
+     * 시청 위치를 보존한 채 페이지 레이아웃을 완전 초기화한다.
+     */
+    private fun reloadWithCurrentTime() {
+        webView.evaluateJavascript(
+            """
+            (function() {
+                var v = document.querySelector('video');
+                return (v && isFinite(v.currentTime)) ? Math.floor(v.currentTime) : 0;
+            })();
+            """.trimIndent()
+        ) { result ->
+            val seconds = result?.toIntOrNull() ?: 0
+            val current = webView.url ?: return@evaluateJavascript
+            val cleaned = current
+                .replace(Regex("([?&])t=\\d+s?(&|$)"), "$1")
+                .replace(Regex("[?&]$"), "")
+            val sep = if (cleaned.contains("?")) "&" else "?"
+            val target = if (seconds > 0) "$cleaned${sep}t=${seconds}s" else cleaned
+            webView.loadUrl(target)
+        }
+    }
+
+    private fun shareCurrentUrl() {
+        val url = webView.url ?: return
+        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(android.content.Intent.EXTRA_TEXT, url)
+        }
+        startActivity(android.content.Intent.createChooser(intent, "공유"))
     }
 
     /**
@@ -501,6 +620,34 @@ class PlayerActivity : Activity() {
                     childList: true, subtree: true
                 });
 
+                // ========== 자동 음소거 해제 ==========
+                function unmuteAll() {
+                    var videos = document.querySelectorAll('video');
+                    for (var i = 0; i < videos.length; i++) {
+                        try {
+                            videos[i].muted = false;
+                            videos[i].volume = 1.0;
+                        } catch (e) {}
+                    }
+                    var labels = ['음소거 해제', 'unmute', 'tap to unmute'];
+                    var candidates = document.querySelectorAll(
+                        'button, [role="button"], .ytp-unmute, .ytp-unmute-button'
+                    );
+                    for (var j = 0; j < candidates.length; j++) {
+                        var el = candidates[j];
+                        var aria = (el.getAttribute('aria-label') || '').toLowerCase();
+                        var text = (el.textContent || '').toLowerCase();
+                        for (var k = 0; k < labels.length; k++) {
+                            if (aria.indexOf(labels[k]) !== -1 || text.indexOf(labels[k]) !== -1) {
+                                try { el.click(); } catch (e) {}
+                                break;
+                            }
+                        }
+                    }
+                }
+                setInterval(unmuteAll, 500);
+                document.addEventListener('play', unmuteAll, true);
+
                 // ========== 3. 영상 정보 영역 레이아웃 동적 조정 ==========
                 function adjustLayout() {
                     var player = document.querySelector('#player-container-id');
@@ -585,20 +732,50 @@ class PlayerActivity : Activity() {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
 
         if (isInPictureInPictureMode) {
-            // PIP 진입: PiP 버튼 숨기고 비디오를 전체 화면으로
-            pipBtn?.visibility = View.GONE
+            // PIP 진입: 상단바 숨기고 비디오를 전체 화면으로
+            topBar?.visibility = View.GONE
+            (webView.layoutParams as? FrameLayout.LayoutParams)?.let {
+                it.topMargin = 0
+                webView.layoutParams = it
+            }
             webView.evaluateJavascript("""
                 (function() {
+                    function applyFullscreenVideo() {
+                        var video = document.querySelector('video');
+                        if (!video) return;
+                        video.style.cssText = 'position:fixed !important;top:0 !important;left:0 !important;width:100vw !important;height:100vh !important;z-index:999999 !important;object-fit:cover !important;background:black !important;';
+                        // 부모 체인까지 풀스크린 강제 (YT 플레이어 컨테이너가 영상을 제약하지 않도록)
+                        var p = video.parentElement;
+                        var depth = 0;
+                        while (p && depth < 8) {
+                            p.style.setProperty('width', '100vw', 'important');
+                            p.style.setProperty('height', '100vh', 'important');
+                            p.style.setProperty('max-width', 'none', 'important');
+                            p.style.setProperty('max-height', 'none', 'important');
+                            p.style.setProperty('position', 'fixed', 'important');
+                            p.style.setProperty('top', '0', 'important');
+                            p.style.setProperty('left', '0', 'important');
+                            p = p.parentElement;
+                            depth++;
+                        }
+                    }
+
+                    applyFullscreenVideo();
+                    document.body.style.overflow = 'hidden';
+
+                    var style = document.createElement('style');
+                    style.id = 'ytplayer-pip-style';
+                    style.textContent = 'ytm-app, .player-controls-background, .watch-below-the-player, #secondary, .slim-video-metadata-header { display:none !important; } body { background:black !important; overflow:hidden !important; margin:0 !important; padding:0 !important; }';
+                    document.head.appendChild(style);
+
+                    // PiP 창 크기가 바뀔 때마다 재적용
+                    window._ytPipResizeHandler = applyFullscreenVideo;
+                    window.addEventListener('resize', window._ytPipResizeHandler);
+                    if (window._ytPipInterval) clearInterval(window._ytPipInterval);
+                    window._ytPipInterval = setInterval(applyFullscreenVideo, 500);
+
                     var video = document.querySelector('video');
                     if (video) {
-                        video.style.cssText = 'position:fixed !important;top:0 !important;left:0 !important;width:100vw !important;height:100vh !important;z-index:999999 !important;object-fit:contain !important;background:black !important;';
-                        document.body.style.overflow = 'hidden';
-                        // 다른 UI 요소 숨김
-                        var style = document.createElement('style');
-                        style.id = 'ytplayer-pip-style';
-                        style.textContent = 'ytm-app, .player-controls-background, .watch-below-the-player, #secondary, .slim-video-metadata-header { display:none !important; } body { background:black !important; overflow:hidden !important; }';
-                        document.head.appendChild(style);
-                        // PiP 진입 시 음소거 상태 보존 후 재생 재개
                         var wasMuted = video.muted;
                         video.play().then(function() {
                             video.muted = wasMuted;
@@ -607,17 +784,46 @@ class PlayerActivity : Activity() {
                 })();
             """.trimIndent(), null)
         } else {
-            // PIP 복귀: PiP 버튼 복원, 비디오 스타일 원래대로
-            pipBtn?.visibility = View.VISIBLE
+            // PIP 복귀: 상단바 복원, 비디오 스타일 원래대로
+            topBar?.visibility = View.VISIBLE
+            val density = resources.displayMetrics.density
+            (webView.layoutParams as? FrameLayout.LayoutParams)?.let {
+                it.topMargin = (48 * density).toInt()
+                webView.layoutParams = it
+            }
+            // 페이지 리로드로 레이아웃 완전 복원 + 시청 위치 보존
+            reloadWithCurrentTime()
             webView.evaluateJavascript("""
                 (function() {
+                    if (window._ytPipResizeHandler) {
+                        window.removeEventListener('resize', window._ytPipResizeHandler);
+                        window._ytPipResizeHandler = null;
+                    }
+                    if (window._ytPipInterval) {
+                        clearInterval(window._ytPipInterval);
+                        window._ytPipInterval = null;
+                    }
                     var video = document.querySelector('video');
                     if (video) {
                         video.style.cssText = '';
+                        var p = video.parentElement;
+                        var depth = 0;
+                        while (p && depth < 8) {
+                            ['width','height','max-width','max-height','position','top','left']
+                                .forEach(function(k) { p.style.removeProperty(k); });
+                            p = p.parentElement;
+                            depth++;
+                        }
                         document.body.style.overflow = '';
                     }
                     var pipStyle = document.getElementById('ytplayer-pip-style');
                     if (pipStyle) pipStyle.remove();
+
+                    // YouTube 레이아웃 재계산 트리거
+                    setTimeout(function() {
+                        window.dispatchEvent(new Event('resize'));
+                        document.dispatchEvent(new Event('visibilitychange'));
+                    }, 100);
                 })();
             """.trimIndent(), null)
         }

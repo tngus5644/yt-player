@@ -8,6 +8,7 @@ import 'ytplayer/dashboard_notice_section.dart';
 import 'ytplayer/dashboard_info_banner.dart';
 import 'ytplayer/dashboard_reward_shop_section.dart';
 import 'ytplayer/dashboard_usage_history_section.dart';
+import 'ytplayer/coupang_ad_section.dart';
 
 class YTPlayerTab extends ConsumerStatefulWidget {
   const YTPlayerTab({super.key});
@@ -87,6 +88,8 @@ class _YTPlayerTabState extends ConsumerState<YTPlayerTab> {
               const DashboardRewardShopSection(),
               const SizedBox(height: 20),
               const DashboardUsageHistorySection(),
+              const SizedBox(height: 24),
+              const CoupangAdSection(),
               const SizedBox(height: 32),
             ],
           ),

@@ -7,7 +7,8 @@ import '../../widgets/video_card.dart';
 import '../../widgets/shorts_card.dart';
 
 class HistoryScreen extends ConsumerStatefulWidget {
-  const HistoryScreen({super.key});
+  final bool shortsOnly;
+  const HistoryScreen({super.key, this.shortsOnly = false});
 
   @override
   ConsumerState<HistoryScreen> createState() => _HistoryScreenState();
@@ -20,12 +21,17 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(historyListProvider.notifier).load();
+      if (widget.shortsOnly) {
+        ref.read(libraryDataProvider.notifier).load();
+      } else {
+        ref.read(historyListProvider.notifier).load();
+      }
     });
     _scrollController.addListener(_onScroll);
   }
 
   void _onScroll() {
+    if (widget.shortsOnly) return; // 라이브러리 데이터는 추가 페이지 없음
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 300) {
       ref.read(historyListProvider.notifier).loadMore();
@@ -40,12 +46,15 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final historyAsync = ref.watch(historyListProvider);
     final colorScheme = Theme.of(context).colorScheme;
+    // shorts-only 모드는 라이브러리(FElibrary) 응답을, 그 외는 FEhistory 응답을 사용
+    final historyAsync = widget.shortsOnly
+        ? ref.watch(libraryDataProvider).whenData((d) => d.historyVideos)
+        : ref.watch(historyListProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('기록'),
+        title: Text(widget.shortsOnly ? 'Shorts 기록' : '기록'),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
@@ -102,7 +111,21 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
             ],
           ),
         ),
-        data: (videos) {
+        data: (allVideos) {
+          bool isShorts(VideoItem v) {
+            if (v.videoType == VideoType.shorts) return true;
+            // duration "0:30" / "1:00" 등 60초 이하 = Shorts로 간주
+            final m = RegExp(r'^(\d+):(\d{2})$').firstMatch(v.duration);
+            if (m != null) {
+              final total = int.parse(m.group(1)!) * 60 + int.parse(m.group(2)!);
+              return total <= 60;
+            }
+            return false;
+          }
+
+          final videos = widget.shortsOnly
+              ? allVideos.where(isShorts).toList()
+              : allVideos;
           if (videos.isEmpty) {
             return Center(
               child: Column(
@@ -119,12 +142,8 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
           }
 
           // Shorts와 일반 영상 분리
-          final shorts = videos
-              .where((v) => v.videoType == VideoType.shorts)
-              .toList();
-          final regularVideos = videos
-              .where((v) => v.videoType != VideoType.shorts)
-              .toList();
+          final shorts = videos.where(isShorts).toList();
+          final regularVideos = videos.where((v) => !isShorts(v)).toList();
 
           return RefreshIndicator(
             onRefresh: () => ref.read(historyListProvider.notifier).load(),
@@ -133,48 +152,76 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
               slivers: [
                 // Shorts 섹션
                 if (shorts.isNotEmpty) ...[
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      child: Row(
-                        children: [
-                          Icon(Icons.play_circle_filled,
-                              size: 20, color: Colors.red[600]),
-                          const SizedBox(width: 8),
-                          const Text('Shorts',
-                              style: TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.bold)),
-                        ],
+                  if (!widget.shortsOnly)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        child: Row(
+                          children: [
+                            Icon(Icons.play_circle_filled,
+                                size: 20, color: Colors.red[600]),
+                            const SizedBox(width: 8),
+                            const Text('Shorts',
+                                style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold)),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: 220,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        itemCount: shorts.length,
-                        itemBuilder: (context, index) {
-                          final video = shorts[index];
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: SizedBox(
-                              width: 140,
-                              child: ShortsCard(
-                                video: video,
-                                onTap: () {
-                                  ref
-                                      .read(webViewChannelProvider)
-                                      .playVideo(video.youtubeUrl);
-                                },
+                  if (widget.shortsOnly)
+                    SliverPadding(
+                      padding: const EdgeInsets.all(8),
+                      sliver: SliverGrid(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          childAspectRatio: 9 / 16,
+                          mainAxisSpacing: 8,
+                          crossAxisSpacing: 8,
+                        ),
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final video = shorts[index];
+                            return ShortsCard(
+                              video: video,
+                              onTap: () => ref
+                                  .read(webViewChannelProvider)
+                                  .playVideo(video.youtubeUrl),
+                            );
+                          },
+                          childCount: shorts.length,
+                        ),
+                      ),
+                    )
+                  else
+                    SliverToBoxAdapter(
+                      child: SizedBox(
+                        height: 220,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          itemCount: shorts.length,
+                          itemBuilder: (context, index) {
+                            final video = shorts[index];
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: SizedBox(
+                                width: 140,
+                                child: ShortsCard(
+                                  video: video,
+                                  onTap: () {
+                                    ref
+                                        .read(webViewChannelProvider)
+                                        .playVideo(video.youtubeUrl);
+                                  },
+                                ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
                     ),
-                  ),
                 ],
                 // 일반 영상 리스트
                 if (regularVideos.isNotEmpty)
@@ -204,7 +251,8 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                   ),
                 ),
                 // 로딩 인디케이터
-                if (ref.read(historyListProvider.notifier).hasMore)
+                if (!widget.shortsOnly &&
+                    ref.read(historyListProvider.notifier).hasMore)
                   const SliverToBoxAdapter(
                     child: Padding(
                       padding: EdgeInsets.all(16),

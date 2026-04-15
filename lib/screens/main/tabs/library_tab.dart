@@ -6,6 +6,7 @@ import '../../../models/webview/playlist_item.dart';
 import '../../../models/webview/video_item.dart';
 import '../../../providers/webview_provider.dart';
 import '../../../widgets/login_gate.dart';
+import '../../../widgets/shorts_card.dart';
 
 class LibraryTab extends ConsumerStatefulWidget {
   const LibraryTab({super.key});
@@ -80,11 +81,20 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
           children: [
             _buildProfileHeader(context, colorScheme),
             if (data.historyVideos.isNotEmpty) ...[
-              _SectionHeader(
-                title: '기록',
-                onViewAll: () => context.push('/history'),
-              ),
-              _HistoryRow(videos: data.historyVideos),
+              if (_filterShorts(data.historyVideos).isNotEmpty) ...[
+                _SectionHeader(
+                  title: 'Shorts',
+                  onViewAll: () => context.push('/history?type=shorts'),
+                ),
+                _ShortsRow(videos: _filterShorts(data.historyVideos)),
+              ],
+              if (_filterNonShorts(data.historyVideos).isNotEmpty) ...[
+                _SectionHeader(
+                  title: '기록',
+                  onViewAll: () => context.push('/history'),
+                ),
+                _HistoryRow(videos: _filterNonShorts(data.historyVideos)),
+              ],
             ],
             if (data.playlists.isNotEmpty) ...[
               _SectionHeader(
@@ -163,6 +173,54 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+bool _isShorts(VideoItem v) {
+  if (v.videoType == VideoType.shorts) return true;
+  final m = RegExp(r'^(\d+):(\d{2})$').firstMatch(v.duration);
+  if (m != null) {
+    final total = int.parse(m.group(1)!) * 60 + int.parse(m.group(2)!);
+    return total <= 60;
+  }
+  return false;
+}
+
+List<VideoItem> _filterShorts(List<VideoItem> videos) =>
+    videos.where(_isShorts).toList();
+
+List<VideoItem> _filterNonShorts(List<VideoItem> videos) =>
+    videos.where((v) => !_isShorts(v)).toList();
+
+class _ShortsRow extends ConsumerWidget {
+  final List<VideoItem> videos;
+
+  const _ShortsRow({required this.videos});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SizedBox(
+      height: 240,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: videos.length,
+        itemBuilder: (context, index) {
+          final video = videos[index];
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: SizedBox(
+              width: 130,
+              child: ShortsCard(
+                video: video,
+                onTap: () =>
+                    ref.read(webViewChannelProvider).playVideo(video.youtubeUrl),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

@@ -29,7 +29,9 @@ final router = GoRouter(
     ),
     GoRoute(
       path: '/history',
-      builder: (context, state) => const HistoryScreen(),
+      builder: (context, state) => HistoryScreen(
+        shortsOnly: state.uri.queryParameters['type'] == 'shorts',
+      ),
     ),
     GoRoute(
       path: '/settings',

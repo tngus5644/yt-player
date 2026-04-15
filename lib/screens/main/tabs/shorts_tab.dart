@@ -31,7 +31,7 @@ class ShortsTab extends ConsumerWidget {
           ),
           IconButton(
             icon: const Icon(Icons.history),
-            onPressed: () => context.push('/history'),
+            onPressed: () => context.push('/history?type=shorts'),
           ),
         ],
       ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,6 +26,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     LibraryTab(),
   ];
 
+  StreamSubscription? _navSub;
+
   @override
   void initState() {
     super.initState();
@@ -35,7 +38,30 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       ref.listenManual(loginStateProvider, (prev, next) {
         if (next) _onLoggedIn();
       });
+      // 네이티브(PlayerActivity 등)에서 보낸 탭 이동 요청 수신
+      _navSub = ref.read(webViewChannelProvider).dataStream
+          .where((e) => e.type == 'navigateTab')
+          .listen((e) {
+        final target = e.data?['tab'] as String?;
+        final index = switch (target) {
+          'home' => 0,
+          'shorts' => 1,
+          'ytplayer' => 2,
+          'subscribe' => 3,
+          'library' => 4,
+          _ => null,
+        };
+        if (index != null) {
+          ref.read(currentTabProvider.notifier).state = index;
+        }
+      });
     });
+  }
+
+  @override
+  void dispose() {
+    _navSub?.cancel();
+    super.dispose();
   }
 
   void _onLoggedIn() {

@@ -327,30 +327,6 @@ class PlayerActivity : Activity() {
         }
     }
 
-    /**
-     * 현재 video.currentTime을 가져와 URL의 t= 파라미터로 박은 뒤 reload.
-     * 시청 위치를 보존한 채 페이지 레이아웃을 완전 초기화한다.
-     */
-    private fun reloadWithCurrentTime() {
-        webView.evaluateJavascript(
-            """
-            (function() {
-                var v = document.querySelector('video');
-                return (v && isFinite(v.currentTime)) ? Math.floor(v.currentTime) : 0;
-            })();
-            """.trimIndent()
-        ) { result ->
-            val seconds = result?.toIntOrNull() ?: 0
-            val current = webView.url ?: return@evaluateJavascript
-            val cleaned = current
-                .replace(Regex("([?&])t=\\d+s?(&|$)"), "$1")
-                .replace(Regex("[?&]$"), "")
-            val sep = if (cleaned.contains("?")) "&" else "?"
-            val target = if (seconds > 0) "$cleaned${sep}t=${seconds}s" else cleaned
-            webView.loadUrl(target)
-        }
-    }
-
     private fun shareCurrentUrl() {
         val url = webView.url ?: return
         val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
@@ -709,7 +685,26 @@ class PlayerActivity : Activity() {
         return if (resourceId > 0) resources.getDimensionPixelSize(resourceId) else 0
     }
 
+    private fun isLoggedIn(): Boolean {
+        val cookies = android.webkit.CookieManager.getInstance()
+            .getCookie("https://www.youtube.com") ?: ""
+        return cookies.contains("SID=") ||
+            cookies.contains("SSID=") ||
+            cookies.contains("__Secure-1PSID=")
+    }
+
     private fun enterPipMode() {
+        if (!isLoggedIn()) {
+            // 로그인 안 됨: YTPlayer 탭으로 이동 후 Activity 종료
+            val intent = android.content.Intent(this, MainActivity::class.java).apply {
+                flags = android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("navigate_to", "ytplayer")
+            }
+            startActivity(intent)
+            finish()
+            return
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !isShowingShorts()) {
             val builder = PictureInPictureParams.Builder()
                 .setAspectRatio(Rational(16, 9))
@@ -732,100 +727,30 @@ class PlayerActivity : Activity() {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
 
         if (isInPictureInPictureMode) {
-            // PIP 진입: 상단바 숨기고 비디오를 전체 화면으로
             topBar?.visibility = View.GONE
             (webView.layoutParams as? FrameLayout.LayoutParams)?.let {
                 it.topMargin = 0
                 webView.layoutParams = it
             }
-            webView.evaluateJavascript("""
-                (function() {
-                    function applyFullscreenVideo() {
-                        var video = document.querySelector('video');
-                        if (!video) return;
-                        video.style.cssText = 'position:fixed !important;top:0 !important;left:0 !important;width:100vw !important;height:100vh !important;z-index:999999 !important;object-fit:cover !important;background:black !important;';
-                        // 부모 체인까지 풀스크린 강제 (YT 플레이어 컨테이너가 영상을 제약하지 않도록)
-                        var p = video.parentElement;
-                        var depth = 0;
-                        while (p && depth < 8) {
-                            p.style.setProperty('width', '100vw', 'important');
-                            p.style.setProperty('height', '100vh', 'important');
-                            p.style.setProperty('max-width', 'none', 'important');
-                            p.style.setProperty('max-height', 'none', 'important');
-                            p.style.setProperty('position', 'fixed', 'important');
-                            p.style.setProperty('top', '0', 'important');
-                            p.style.setProperty('left', '0', 'important');
-                            p = p.parentElement;
-                            depth++;
-                        }
-                    }
-
-                    applyFullscreenVideo();
-                    document.body.style.overflow = 'hidden';
-
-                    var style = document.createElement('style');
-                    style.id = 'ytplayer-pip-style';
-                    style.textContent = 'ytm-app, .player-controls-background, .watch-below-the-player, #secondary, .slim-video-metadata-header { display:none !important; } body { background:black !important; overflow:hidden !important; margin:0 !important; padding:0 !important; }';
-                    document.head.appendChild(style);
-
-                    // PiP 창 크기가 바뀔 때마다 재적용
-                    window._ytPipResizeHandler = applyFullscreenVideo;
-                    window.addEventListener('resize', window._ytPipResizeHandler);
-                    if (window._ytPipInterval) clearInterval(window._ytPipInterval);
-                    window._ytPipInterval = setInterval(applyFullscreenVideo, 500);
-
-                    var video = document.querySelector('video');
-                    if (video) {
-                        var wasMuted = video.muted;
-                        video.play().then(function() {
-                            video.muted = wasMuted;
-                        }).catch(function(e) { console.log('PiP play failed:', e); });
-                    }
-                })();
-            """.trimIndent(), null)
         } else {
-            // PIP 복귀: 상단바 복원, 비디오 스타일 원래대로
             topBar?.visibility = View.VISIBLE
             val density = resources.displayMetrics.density
             (webView.layoutParams as? FrameLayout.LayoutParams)?.let {
                 it.topMargin = (48 * density).toInt()
                 webView.layoutParams = it
             }
-            // 페이지 리로드로 레이아웃 완전 복원 + 시청 위치 보존
-            reloadWithCurrentTime()
-            webView.evaluateJavascript("""
-                (function() {
-                    if (window._ytPipResizeHandler) {
-                        window.removeEventListener('resize', window._ytPipResizeHandler);
-                        window._ytPipResizeHandler = null;
-                    }
-                    if (window._ytPipInterval) {
-                        clearInterval(window._ytPipInterval);
-                        window._ytPipInterval = null;
-                    }
-                    var video = document.querySelector('video');
-                    if (video) {
-                        video.style.cssText = '';
-                        var p = video.parentElement;
-                        var depth = 0;
-                        while (p && depth < 8) {
-                            ['width','height','max-width','max-height','position','top','left']
-                                .forEach(function(k) { p.style.removeProperty(k); });
-                            p = p.parentElement;
-                            depth++;
-                        }
-                        document.body.style.overflow = '';
-                    }
-                    var pipStyle = document.getElementById('ytplayer-pip-style');
-                    if (pipStyle) pipStyle.remove();
+        }
+    }
 
-                    // YouTube 레이아웃 재계산 트리거
-                    setTimeout(function() {
-                        window.dispatchEvent(new Event('resize'));
-                        document.dispatchEvent(new Event('visibilitychange'));
-                    }, 100);
-                })();
-            """.trimIndent(), null)
+    override fun onResume() {
+        super.onResume()
+        webView.onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (!isInPictureInPictureMode) {
+            webView.onPause()
         }
     }
 

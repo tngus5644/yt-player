@@ -10,6 +10,9 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
+import org.json.JSONObject
+import android.os.Handler
+import android.os.Looper
 import com.hashmeter.ytplayer.channel.WebViewMethodChannel
 import com.hashmeter.ytplayer.channel.DataEventChannel
 import com.hashmeter.ytplayer.overlay.OverlayWebViewService
@@ -119,6 +122,28 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleNavigateIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNavigateIntent(intent)
+    }
+
+    /**
+     * 다른 Activity(예: PlayerActivity 로그인 안 된 상태)에서 보낸 탭 이동 요청 처리.
+     * Intent extra "navigate_to" 값을 Flutter 측 이벤트로 전달.
+     */
+    private fun handleNavigateIntent(intent: Intent?) {
+        val target = intent?.getStringExtra("navigate_to") ?: return
+        intent.removeExtra("navigate_to")
+        // Flutter 엔진이 리스너를 구독할 시간을 주기 위해 짧은 지연 후 전송
+        Handler(Looper.getMainLooper()).postDelayed({
+            dataEventChannel.sendEvent("navigateTab", JSONObject().apply {
+                put("tab", target)
+            })
+        }, 400)
     }
 
     // ==================== Activity Result 처리 ====================

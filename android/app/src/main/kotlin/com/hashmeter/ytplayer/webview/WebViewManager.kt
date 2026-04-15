@@ -257,6 +257,10 @@ class WebViewManager(
         return apiClient.fetchVideoDetail(videoId)
     }
 
+    fun getAccountInfo(): InnerTubeApiClient.AccountInfo? {
+        return apiClient.fetchAccountInfo()
+    }
+
     fun scrollBottom() {
         mainHandler.post {
             config.webView?.evaluateJavascript(

@@ -50,6 +50,7 @@ class DashboardProfileCard extends ConsumerWidget {
         const SizedBox(width: 12),
         Expanded(
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
@@ -62,16 +63,6 @@ class DashboardProfileCard extends ConsumerWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              if (displayName.isNotEmpty)
-                Text(
-                  email,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
             ],
           ),
         ),

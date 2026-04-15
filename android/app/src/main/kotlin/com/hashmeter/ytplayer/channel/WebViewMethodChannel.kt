@@ -89,6 +89,27 @@ class WebViewMethodChannel(
                 webViewManager.loadMoreHomeFeed()
                 result.success(null)
             }
+            "getAccountInfo" -> {
+                scope.launch {
+                    try {
+                        val info = withContext(Dispatchers.IO) {
+                            webViewManager.getAccountInfo()
+                        }
+                        if (info == null) {
+                            result.success(null)
+                        } else {
+                            result.success(mapOf(
+                                "displayName" to info.displayName,
+                                "photoUrl" to info.photoUrl,
+                                "channelHandle" to info.channelHandle,
+                                "email" to info.email,
+                            ))
+                        }
+                    } catch (e: Exception) {
+                        result.error("API_ERROR", e.message, null)
+                    }
+                }
+            }
             "getVideoDetail" -> {
                 val videoId = call.argument<String>("videoId") ?: ""
                 if (videoId.isEmpty()) {

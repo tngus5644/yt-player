@@ -16,6 +16,7 @@ abstract class ChannelMethods {
   static const String scrollBottom = 'scrollBottom';
   static const String loadMoreHomeFeed = 'loadMoreHomeFeed';
   static const String getVideoDetail = 'getVideoDetail';
+  static const String getAccountInfo = 'getAccountInfo';
   static const String loadLibrary = 'loadLibrary';
   static const String loadHistory = 'loadHistory';
   static const String loadHistoryContinuation = 'loadHistoryContinuation';
@@ -124,6 +125,18 @@ class WebViewChannel {
     await _methodChannel.invokeMethod(ChannelMethods.loadPlaylistDetail, {'playlistId': playlistId});
   }
 
+  /// 로그인된 YouTube 계정의 프로필(이름·사진) 조회
+  Future<AccountInfo?> getAccountInfo() async {
+    final raw = await _methodChannel.invokeMethod<Map>(ChannelMethods.getAccountInfo);
+    if (raw == null) return null;
+    return AccountInfo(
+      displayName: (raw['displayName'] as String?) ?? '',
+      photoUrl: (raw['photoUrl'] as String?) ?? '',
+      channelHandle: (raw['channelHandle'] as String?) ?? '',
+      email: (raw['email'] as String?) ?? '',
+    );
+  }
+
   void dispose() {
     _eventSubscription?.cancel();
     _dataController.close();
@@ -143,6 +156,21 @@ class WebViewEvent {
       data: json['data'] as Map<String, dynamic>?,
     );
   }
+}
+
+/// 로그인된 YouTube 계정 정보
+class AccountInfo {
+  final String displayName;
+  final String photoUrl;
+  final String channelHandle;
+  final String email;
+
+  const AccountInfo({
+    required this.displayName,
+    required this.photoUrl,
+    required this.channelHandle,
+    required this.email,
+  });
 }
 
 /// 이벤트 타입 상수

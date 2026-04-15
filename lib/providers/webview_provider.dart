@@ -460,6 +460,27 @@ class LoginStateNotifier extends StateNotifier<bool> {
     }
     // WebViewSignInActivity에서 Google 로그인 완료 직후이므로 state = true
     state = true;
+    _enrichWithYouTubeAccountInfo();
+  }
+
+  /// YouTube InnerTube account_menu에서 닉네임/사진 가져와 googleUser 보강
+  Future<void> _enrichWithYouTubeAccountInfo() async {
+    try {
+      final info = await _channel.getAccountInfo();
+      if (info == null) return;
+      final current = _ref.read(googleUserProvider);
+      _ref.read(googleUserProvider.notifier).state = AuthUser(
+        displayName: info.displayName.isNotEmpty
+            ? info.displayName
+            : (current?.displayName ?? ''),
+        email: current?.email ?? info.email,
+        photoUrl: info.photoUrl.isNotEmpty
+            ? info.photoUrl
+            : current?.photoUrl,
+      );
+    } catch (_) {
+      // 실패 시 기존 정보 유지
+    }
   }
 
   /// 앱 시작 시 세션 복원 (2단계)
@@ -481,6 +502,7 @@ class LoginStateNotifier extends StateNotifier<bool> {
             photoUrl: response.user!.profilePhotoUrl,
           );
           state = true;
+          _enrichWithYouTubeAccountInfo();
           return;
         }
       } on DioException catch (e) {
@@ -531,6 +553,7 @@ class LoginStateNotifier extends StateNotifier<bool> {
       }
       // Google 세션 유효 → 백엔드 토큰 유무와 관계없이 로그인 상태
       state = true;
+      _enrichWithYouTubeAccountInfo();
     } catch (_) {
       state = false;
     }

@@ -57,6 +57,13 @@ class InnerTubeApiClient {
         val playlists: JSONArray
     )
 
+    data class AccountInfo(
+        val displayName: String,
+        val photoUrl: String,
+        val channelHandle: String,
+        val email: String
+    )
+
     // ==================== Public API ====================
 
     /**
@@ -536,6 +543,108 @@ class InnerTubeApiClient {
      * 영상 상세 정보 가져오기 (/youtubei/v1/next)
      * 설명, 좋아요, 구독자수, 댓글, 연관영상
      */
+    /**
+     * 로그인된 계정의 프로필 정보 가져오기 (/youtubei/v1/account/account_menu)
+     * SAPISIDHASH 인증이 적용된 createConnection을 사용하므로
+     * 쿠키에 SAPISID가 있어야 정확한 결과를 반환함.
+     */
+    fun fetchAccountInfo(): AccountInfo? {
+        val body = buildRequestBody("WEB", WebViewManager.WEB_CLIENT_VERSION)
+        val conn = createConnection(
+            "$BASE_URL/account/account_menu?key=${WebViewManager.INNERTUBE_API_KEY}&prettyPrint=false"
+        )
+
+        return try {
+            conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            val code = conn.responseCode
+            Log.d(TAG, "account_menu 응답 코드: $code")
+            if (code != 200) {
+                val err = try { conn.errorStream?.bufferedReader()?.readText() ?: "" } catch (_: Exception) { "" }
+                Log.w(TAG, "account_menu 에러: ${err.take(500)}")
+                return null
+            }
+            val raw = conn.inputStream.bufferedReader().readText()
+            Log.d(TAG, "account_menu 응답 길이: ${raw.length}")
+            val response = JSONObject(raw)
+            Log.d(TAG, "account_menu 최상위 키: ${response.keys().asSequence().toList()}")
+
+            val header = findActiveAccountHeader(response)
+            if (header == null) {
+                Log.w(TAG, "activeAccountHeaderRenderer 미발견. 응답 미리보기: ${raw.take(800)}")
+                // 폴백: accountName / accountPhoto / email / channelHandle 키를 직접 재귀 탐색
+                return findAccountFieldsFallback(response)
+            }
+            Log.d(TAG, "헤더 키: ${header.keys().asSequence().toList()}")
+
+            val photoUrl = pickThumbnailUrl(header.opt("accountPhoto"))
+
+            AccountInfo(
+                displayName = extractText(header.opt("accountName")),
+                photoUrl = photoUrl,
+                channelHandle = extractText(header.opt("channelHandle")),
+                email = extractText(header.opt("email"))
+            ).also {
+                Log.d(TAG, "account_menu 결과: name='${it.displayName}', photo='${it.photoUrl.take(60)}', handle='${it.channelHandle}', email='${it.email}'")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "account_menu 호출 실패", e)
+            null
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private fun pickThumbnailUrl(node: Any?): String {
+        val arr = (node as? JSONObject)?.optJSONArray("thumbnails") ?: return ""
+        var best = ""
+        for (i in 0 until arr.length()) best = arr.optJSONObject(i)?.optString("url") ?: best
+        return best
+    }
+
+    /**
+     * activeAccountHeaderRenderer가 없는 응답 구조 변형 대비 폴백.
+     * 트리 어디든 accountName/accountPhoto/email/channelHandle 키가 인접해 있으면 채움.
+     */
+    private fun findAccountFieldsFallback(root: Any?): AccountInfo? {
+        var name = ""; var photo = ""; var handle = ""; var email = ""
+        fun visit(node: Any?) {
+            when (node) {
+                is JSONObject -> {
+                    if (name.isEmpty()) extractText(node.opt("accountName")).let { if (it.isNotEmpty()) name = it }
+                    if (photo.isEmpty()) pickThumbnailUrl(node.opt("accountPhoto")).let { if (it.isNotEmpty()) photo = it }
+                    if (handle.isEmpty()) extractText(node.opt("channelHandle")).let { if (it.isNotEmpty()) handle = it }
+                    if (email.isEmpty()) extractText(node.opt("email")).let { if (it.isNotEmpty()) email = it }
+                    val keys = node.keys()
+                    while (keys.hasNext()) visit(node.opt(keys.next()))
+                }
+                is JSONArray -> for (i in 0 until node.length()) visit(node.opt(i))
+            }
+        }
+        visit(root)
+        Log.d(TAG, "폴백 결과: name='$name', photo='${photo.take(60)}', handle='$handle', email='$email'")
+        return if (name.isNotEmpty() || photo.isNotEmpty()) {
+            AccountInfo(name, photo, handle, email)
+        } else null
+    }
+
+    private fun findActiveAccountHeader(node: Any?): JSONObject? {
+        when (node) {
+            is JSONObject -> {
+                node.optJSONObject("activeAccountHeaderRenderer")?.let { return it }
+                val keys = node.keys()
+                while (keys.hasNext()) {
+                    findActiveAccountHeader(node.opt(keys.next()))?.let { return it }
+                }
+            }
+            is JSONArray -> {
+                for (i in 0 until node.length()) {
+                    findActiveAccountHeader(node.opt(i))?.let { return it }
+                }
+            }
+        }
+        return null
+    }
+
     fun fetchVideoDetail(videoId: String): JSONObject {
         val body = buildRequestBody("WEB", WebViewManager.WEB_CLIENT_VERSION).apply {
             put("videoId", videoId)

@@ -115,7 +115,10 @@ class RewardApiClient {
 
   /// GET /api/ytplayer/notice
   Future<NoticeResponse> getNotice() async {
-    final response = await _dio.get('/api/ytplayer/notice');
+    final response = await _dio.get(
+      '/api/notices',
+      queryParameters: {'application': 'ytplayer'},
+    );
     return NoticeResponse.fromJson(response.data);
   }
 

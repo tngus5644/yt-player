@@ -95,10 +95,11 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       _shortsChannel.invokeMethod('resumeShorts');
     }
 
-    // 탭 전환 시 해당 탭의 데이터 로드 (WebView는 하나이므로 탭별 로드 관리)
-    // YTPlayerTab(case 2)은 자체 initState에서 데이터를 로드
     if (index != prevIndex) {
       switch (index) {
+        case 2: // YTPlayer
+          ref.read(noticeProvider.notifier).fetch();
+          break;
         case 0: // 홈
           final videos = ref.read(homeVideoListProvider);
           if (videos is AsyncLoading || (videos.valueOrNull?.isEmpty ?? true)) {
